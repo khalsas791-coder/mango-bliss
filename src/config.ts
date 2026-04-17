@@ -8,7 +8,7 @@ const isProduction = import.meta.env.PROD;
 // relative URLs are the most robust way to handle backend communication.
 export const API_BASE_URL = isProduction 
   ? '' // Relative to the window.location.origin
-  : 'http://localhost:5000';
+  : 'http://127.0.0.1:5000';
 
 export const API_URL = `${API_BASE_URL}/api`;
 export const SOCKET_URL = API_BASE_URL;

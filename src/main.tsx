@@ -81,15 +81,9 @@ function AppRouter() {
 
 const container = document.getElementById('root');
 
-if (container) {
-  // To completely avoid the "already passed to createRoot()" warning during 
-  // hot reloads or multiple script executions, we replace the root element 
-  // with a fresh clone before mounting. This ensures React always gets a 
-  // pristine DOM node without any leftover internal state.
-  const freshContainer = container.cloneNode(false) as HTMLElement;
-  container.parentNode?.replaceChild(freshContainer, container);
-
-  const root = createRoot(freshContainer);
+if (container && !container.dataset.rendered) {
+  container.dataset.rendered = 'true';
+  const root = createRoot(container);
   
   root.render(
     <StrictMode>

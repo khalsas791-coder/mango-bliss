@@ -25,7 +25,7 @@ import { MapContainer, TileLayer, Marker, Polyline, useMap, Popup } from 'react-
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { io, Socket } from 'socket.io-client';
-import { TrackingConsent } from './TrackingConsent';
+import { io, Socket } from 'socket.io-client';
 import { API_URL, SOCKET_URL } from '../config';
 
 interface LiveTrackingProps {
@@ -133,8 +133,7 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
   const [stage, setStage] = useState(0);
   const [timeLeft, setTimeLeft] = useState(25);
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [isTrackingUser, setIsTrackingUser] = useState(false);
-  const [showConsent, setShowConsent] = useState(false);
+  const [isTrackingUser, setIsTrackingUser] = useState(true);
   const [distance, setDistance] = useState<number | null>(null);
   const [roadDistance, setRoadDistance] = useState<number | null>(null);
   const [roadEta, setRoadEta] = useState<number | null>(null);
@@ -190,15 +189,6 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
   }, []);
 
   // ── Geolocation Tracking ──
-  const handleConsentAccept = () => {
-    setShowConsent(false);
-    startTracking();
-  };
-
-  const handleConsentDecline = () => {
-    setShowConsent(false);
-    addToast('Location sharing declined. Tracking disabled.', 'warning');
-  };
 
   const startTracking = () => {
     if (!navigator.geolocation) {
@@ -288,6 +278,7 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
 
   // ── Cleanup watchPosition on unmount ──
   useEffect(() => {
+    startTracking(); // Automatically start tracking on mount
     return () => {
       if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
       if (routeFetchTimeout.current) clearTimeout(routeFetchTimeout.current);
@@ -381,22 +372,14 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
 
   const progressPercentage = (stage / (steps.length - 1)) * 100;
 
-  // Dark map tile
-  const tileUrl = darkMode
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  // Use Google Maps tiles for exact visual clarity
+  const tileUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
 
   const formatDist = (m: number) =>
     m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`;
 
   return (
     <>
-      {/* Consent Dialog */}
-      <AnimatePresence>
-        {showConsent && (
-          <TrackingConsent onAccept={handleConsentAccept} onDecline={handleConsentDecline} />
-        )}
-      </AnimatePresence>
 
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -611,40 +594,17 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
 
             {/* ── Live Tracking Toggle ── */}
             <div className="mb-6">
-              {!isTrackingUser ? (
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowConsent(true)}
-                  className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 bg-slate-900 text-white shadow-xl"
-                >
-                  <Navigation size={20} />
-                  Enable Live Tracking
-                </motion.button>
-              ) : (
-                <div className="flex gap-3">
-                  <div className="flex-1 py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 bg-emerald-500 text-white shadow-lg shadow-emerald-900/20">
-                    <LocateFixed size={20} />
-                    Tracking Active
-                    <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                  </div>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={stopTracking}
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center bg-rose-600/20 text-rose-500 border border-rose-500/30"
-                    title="Stop Tracking"
-                  >
-                    <StopCircle size={22} />
-                  </motion.button>
+              <div className="flex gap-3">
+                <div className="flex-1 py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 bg-emerald-500 text-white shadow-lg shadow-emerald-900/20">
+                  <LocateFixed size={20} />
+                  GPS ACTIVE
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                 </div>
-              )}
-              {isTrackingUser && (
-                <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest text-center mt-2 flex items-center justify-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  Sharing location for accurate delivery
-                </p>
-              )}
+              </div>
+              <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest text-center mt-2 flex items-center justify-center gap-1">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                Sharing location for accurate delivery
+              </p>
             </div>
 
             {/* ── Bottom Info Strip: Distance + ETA + Status ── */}

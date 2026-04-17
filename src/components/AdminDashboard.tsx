@@ -176,9 +176,8 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const tileUrl = darkMap
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  // Use Google Maps tiles for exact visual clarity
+  const tileUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
 
   const tabs = [
     { key: 'analytics', label: 'Analytics', emoji: '📊' },

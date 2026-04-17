@@ -7,12 +7,32 @@ import Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import mongoose from 'mongoose';
+import authRoutes from './routes/authRoutes.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// --- MongoDB Connection ---
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mango-bliss';
+
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('✅ MongoDB connected successfully'))
+  .catch((err) => console.warn('⚠️ MongoDB connection failed (auth features will be unavailable):', err.message));
+
+// --- Auth Routes ---
+app.use('/api/auth', authRoutes);
+
+// --- Static File Serving (Production) ---
+app.use(express.static(path.join(__dirname, '../dist')));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -38,6 +58,7 @@ db.exec(`
     deliveryLng REAL,
     statusPhase TEXT,
     etaMinutes INTEGER,
+    userId TEXT,
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
   )
@@ -51,6 +72,7 @@ try { db.exec("ALTER TABLE orders ADD COLUMN deliveryLat REAL"); } catch {}
 try { db.exec("ALTER TABLE orders ADD COLUMN deliveryLng REAL"); } catch {}
 try { db.exec("ALTER TABLE orders ADD COLUMN statusPhase TEXT"); } catch {}
 try { db.exec("ALTER TABLE orders ADD COLUMN etaMinutes INTEGER"); } catch {}
+try { db.exec("ALTER TABLE orders ADD COLUMN userId TEXT"); } catch {}
 
 // --- Razorpay Initialization ---
 const razorpay = new Razorpay({
@@ -60,8 +82,8 @@ const razorpay = new Razorpay({
 
 // Prepared statements
 const insertOrder = db.prepare(`
-  INSERT INTO orders (systemOrderId, gatewayOrderId, customerName, productName, amount, paymentMethod, paymentStatus, userLat, userLng, deliveryLat, deliveryLng, statusPhase, etaMinutes)
-  VALUES (@systemOrderId, @gatewayOrderId, @customerName, @productName, @amount, @paymentMethod, @paymentStatus, @userLat, @userLng, @deliveryLat, @deliveryLng, @statusPhase, @etaMinutes)
+  INSERT INTO orders (systemOrderId, gatewayOrderId, customerName, productName, amount, paymentMethod, paymentStatus, userLat, userLng, deliveryLat, deliveryLng, statusPhase, etaMinutes, userId)
+  VALUES (@systemOrderId, @gatewayOrderId, @customerName, @productName, @amount, @paymentMethod, @paymentStatus, @userLat, @userLng, @deliveryLat, @deliveryLng, @statusPhase, @etaMinutes, @userId)
 `);
 
 const verifyOrder = db.prepare(`
@@ -182,7 +204,7 @@ setInterval(() => {
 // --- API Endpoints ---
 app.post('/api/orders/create', async (req, res) => {
   try {
-    const { productName, amount, customerName, paymentMethod, userLat, userLng } = req.body;
+    const { productName, amount, customerName, paymentMethod, userLat, userLng, userId } = req.body;
     const systemOrderId = `ORD-${Date.now()}-${uuidv4().substring(0, 8)}`;
 
     const options = {
@@ -219,7 +241,8 @@ app.post('/api/orders/create', async (req, res) => {
       deliveryLat: startLat,
       deliveryLng: startLng,
       statusPhase: initPhase,
-      etaMinutes: 25 // default init ETA
+      etaMinutes: 25, // default init ETA
+      userId: userId || null
     };
 
     insertOrder.run(orderData);
@@ -328,6 +351,11 @@ app.get('/api/orders/:id', (req, res) => {
    } catch(err) {
      res.status(500).json({ success: false, message: err.message });
    }
+});
+
+// --- Catch-All Route (Must be last) ---
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 const PORT = process.env.PORT || 5000;

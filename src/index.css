@@ -34,3 +34,51 @@
 .text-gradient {
   @apply bg-clip-text text-transparent bg-linear-to-r from-mango-600 to-orange-600;
 }
+
+/* Dark Glassmorphism for Auth */
+.glass-dark {
+  background: rgba(15, 15, 20, 0.75);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@layer utilities {
+  @keyframes pulse-ring {
+    0% { transform: scale(0.33); }
+    80%, 100% { opacity: 0; }
+  }
+  
+  @keyframes pulse-dot {
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1); }
+    100% { transform: scale(0.8); }
+  }
+
+  @keyframes auth-glow {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.02); }
+  }
+
+  @keyframes gradient-shift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .animate-pulse-ring {
+    animation: pulse-ring 1.25s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+  }
+  
+  .animate-pulse-dot {
+    animation: pulse-dot 1.25s cubic-bezier(0.455, 0.03, 0.515, 0.955) -0.4s infinite;
+  }
+
+  .auth-glow-pulse {
+    animation: auth-glow 3s ease-in-out infinite;
+  }
+
+  .auth-gradient-shift {
+    animation: gradient-shift 3s ease-in-out infinite;
+  }
+}

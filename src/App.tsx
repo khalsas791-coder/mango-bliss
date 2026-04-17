@@ -11,8 +11,11 @@ import {
   Star,
   Settings2,
   X,
-  Trophy
+  Trophy,
+  LogOut,
+  User as UserIcon
 } from 'lucide-react';
+import { useAuthStore } from './store/authStore';
 import { MangoShakeModel } from './components/MangoShakeModel';
 import { MangoGame } from './components/MangoGame';
 import { ProductPage } from './components/ProductPage';
@@ -26,6 +29,7 @@ export default function App() {
   const [shakeColor, setShakeColor] = useState('#fbbf24'); // Default Mango
   const [toppingType, setToppingType] = useState<'mango' | 'pistachio' | 'chocolate'>('mango');
   const [globalCoupon, setGlobalCoupon] = useState(false);
+  const { user, logout } = useAuthStore();
 
   const flavors = [
     { name: 'Classic Mango', color: '#fbbf24', id: 'mango', icon: '🥭' },
@@ -59,6 +63,26 @@ export default function App() {
                       <span className="text-[#e11d48] font-bold text-xl">M</span>
                     </div>
                     <span className="font-display font-bold text-xl tracking-tight">MANGO BLISS</span>
+                  </div>
+
+                  {/* User Profile in Navbar */}
+                  <div className="absolute top-10 right-24 flex items-center gap-4 group">
+                    <div className="text-right hidden sm:block">
+                      <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest">Welcome back</p>
+                      <p className="text-white font-bold text-sm tracking-tight">{user?.name}</p>
+                    </div>
+                    <div className="relative">
+                      <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full border border-white/20 flex items-center justify-center text-white group-hover:bg-white/20 transition-all">
+                        <UserIcon size={18} />
+                      </div>
+                      <button 
+                        onClick={logout}
+                        title="Sign Out"
+                        className="absolute -bottom-2 -right-2 w-6 h-6 bg-rose-600 rounded-full flex items-center justify-center text-white border-2 border-[#e11d48] hover:scale-110 transition-transform shadow-lg cursor-pointer"
+                      >
+                        <LogOut size={12} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="w-full max-w-7xl mx-auto flex flex-col items-start">

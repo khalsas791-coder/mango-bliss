@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, CreditCard, Truck, Smartphone, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { paymentService } from '../services/paymentService';
 import { v4 as uuidv4 } from 'uuid';
+import { useAuthStore } from '../store/authStore';
+import { useEffect } from 'react';
 
 interface CheckoutDrawerProps {
   onClose: () => void;
@@ -27,7 +29,18 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
     state: 'MH',
     pincode: '400001'
   });
+  
+  const { user, isAuthenticated } = useAuthStore();
 
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      setCustomer(prev => ({
+        ...prev,
+        name: user.name,
+        email: user.email
+      }));
+    }
+  }, [isAuthenticated, user]);
   const basePrice = 60.00;
   const subtotal = basePrice * productInfo.quantity;
   const discount = productInfo.couponApplied ? subtotal * 0.10 : 0;
@@ -59,7 +72,8 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
         customerName: customer.name,
         paymentMethod: method,
         userLat,
-        userLng
+        userLng,
+        userId: user?.id
       });
 
       if (!orderRes.success) throw new Error("Order creation failed");

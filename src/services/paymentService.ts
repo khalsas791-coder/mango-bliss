@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5000/api';
+import { API_URL } from '../config';
 
 export const paymentService = {
   createOrder: async (orderData: {
@@ -8,6 +8,7 @@ export const paymentService = {
     paymentMethod: string;
     userLat?: number;
     userLng?: number;
+    userId?: string;
   }) => {
     const response = await fetch(`${API_URL}/orders/create`, {
       method: 'POST',

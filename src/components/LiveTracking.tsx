@@ -1,112 +1,160 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, Package, Truck, Home, MapPin, Clock } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { io, Socket } from 'socket.io-client';
 
 interface LiveTrackingProps {
   onClose: () => void;
   orderId: string;
 }
 
-export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
-  const [stage, setStage] = useState(0); // 0 to 4
-  const [timeLeft, setTimeLeft] = useState(15);
-  
+const API_URL = 'http://localhost:5000';
+
+// Custom Map Icons
+const deliveryIcon = new L.Icon({
+  iconUrl: 'https://cdn-icons-png.flaticon.com/512/2983/2983067.png', // Scooter icon
+  iconSize: [40, 40],
+  iconAnchor: [20, 20]
+});
+
+const startIcon = new L.Icon({
+  iconUrl: 'https://cdn-icons-png.flaticon.com/512/2776/2776067.png', // Shop icon
+  iconSize: [40, 40],
+  iconAnchor: [20, 40]
+});
+
+const createCustomIcon = (color: string) => {
+  return L.divIcon({
+    className: 'custom-div-icon',
+    html: `<div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.5);"></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10]
+  });
+};
+
+function MapUpdater({ center }: { center: [number, number] }) {
+  const map = useMap();
   useEffect(() => {
-    // 0 sec -> Confirmed (0)
-    // 5 sec -> Preparing (1)
-    // 10 sec -> Packed (2)
-    // 15 sec -> Delivery (3)
-    // 20 sec -> Delivered (4)
-    const timers = [
-      setTimeout(() => setStage(1), 5000),
-      setTimeout(() => setStage(2), 10000),
-      setTimeout(() => setStage(3), 15000),
-      setTimeout(() => setStage(4), 20000),
-    ];
-    
-    // Countdown timer for ETA
-    const countInterval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) return 0;
-        return prev - 1; // Decrease every 1.5 seconds approx to map 20s to 15 mins?
-        // Let's just decrease realistically for the demo
-      });
-    }, 1333); // 20s / 15 = 1.33s per minute
+    map.flyTo(center, map.getZoom(), { animate: true });
+  }, [center, map]);
+  return null;
+}
+
+export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
+  const [stage, setStage] = useState(0); 
+  const [timeLeft, setTimeLeft] = useState(25);
+  const [socket, setSocket] = useState<Socket | null>(null);
+  
+  const [deliveryPos, setDeliveryPos] = useState<[number, number]>([17.9254, 77.5187]);
+  const [userPos, setUserPos] = useState<[number, number]>([17.9254, 77.5187]);
+  const storePos: [number, number] = [17.9254, 77.5187];
+
+  const prevStageRef = useRef(0);
+
+  const phaseMap: Record<string, number> = {
+    'cod_placed': 0,
+    'preparing': 1,
+    'shipped': 2,
+    'out_for_delivery': 3,
+    'delivered': 4
+  };
+
+  useEffect(() => {
+    // Determine User Pos from order details initially
+    fetch(`${API_URL}/api/orders/${orderId}`)
+      .then(res => res.json())
+      .then(data => {
+         if (data.success && data.order) {
+           setUserPos([data.order.userLat, data.order.userLng]);
+           setDeliveryPos([data.order.deliveryLat, data.order.deliveryLng]);
+           setStage(phaseMap[data.order.statusPhase] ?? 0);
+           setTimeLeft(data.order.etaMinutes ?? 25);
+         }
+      })
+      .catch(console.error);
+
+    // Initialize Socket
+    const newSocket = io(API_URL);
+    setSocket(newSocket);
+
+    newSocket.on('connect', () => {
+      newSocket.emit('joinOrderRoom', orderId);
+    });
+
+    newSocket.on('locationUpdate', (data: any) => {
+      setDeliveryPos([data.deliveryLat, data.deliveryLng]);
+      
+      const newStage = phaseMap[data.statusPhase] ?? 0;
+      setStage(newStage);
+      setTimeLeft(data.etaMinutes);
+    });
 
     return () => {
-      timers.forEach(clearTimeout);
-      clearInterval(countInterval);
+      newSocket.disconnect();
     };
-  }, []);
+  }, [orderId]);
+
+  useEffect(() => {
+    // Sound logic
+    if (stage > prevStageRef.current && stage > 0) {
+       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+       audio.play().catch(() => {});
+    }
+    prevStageRef.current = stage;
+  }, [stage]);
 
   const steps = [
-    { title: 'Order Confirmed', icon: CheckCircle2, time: '12:00 PM' },
-    { title: 'Preparing Product', icon: Package, time: '12:05 PM' },
-    { title: 'Packed', icon: MapPin, time: '12:10 PM' },
-    { title: 'Out for Delivery', icon: Truck, time: '12:15 PM' },
-    { title: 'Delivered', icon: Home, time: '12:20 PM' }
+    { title: 'Order Confirmed', icon: CheckCircle2 },
+    { title: 'Preparing Product', icon: Package },
+    { title: 'Shipped (Packed)', icon: MapPin },
+    { title: 'Out for Delivery', icon: Truck },
+    { title: 'Delivered', icon: Home }
   ];
 
   const progressPercentage = (stage / (steps.length - 1)) * 100;
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: '100%' }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: '100%' }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       className="fixed inset-0 z-[500] bg-slate-50 flex flex-col md:flex-row"
     >
       <button 
         onClick={onClose}
-        className="absolute top-6 right-6 z-10 w-12 h-12 flex items-center justify-center rounded-full bg-white shadow-md text-slate-900 hover:bg-slate-100 transition-colors"
+        className="absolute top-6 right-6 z-[600] w-12 h-12 flex items-center justify-center rounded-full bg-white shadow-xl text-slate-900 hover:bg-slate-100 transition-colors"
       >
         <X size={24} />
       </button>
 
-      {/* Map Demo Section */}
-      <div className="w-full md:w-1/2 h-64 md:h-full bg-slate-200 relative overflow-hidden flex items-center justify-center">
-        {/* Fake Map Background */}
-        <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-        <div className="absolute w-[150%] h-[150%] rounded-full border-4 border-slate-300 opacty-20 animate-pulse"></div>
-        <div className="absolute w-[100%] h-[100%] rounded-full border-4 border-slate-300 opacty-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
-        
-        {/* Animated Route Line */}
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-           <path d="M 20 80 Q 50 20 80 20" fill="none" stroke="#e11d48" strokeWidth="2" strokeDasharray="5,5" className="opacity-50" />
-           <motion.path 
-             d="M 20 80 Q 50 20 80 20" 
-             fill="none" 
-             stroke="#e11d48" 
-             strokeWidth="4" 
-             initial={{ pathLength: 0 }}
-             animate={{ pathLength: progressPercentage / 100 }}
-             transition={{ duration: 0.5 }}
-           />
-        </svg>
-
-        {/* Start Point */}
-        <div className="absolute bottom-[20%] left-[20%] w-6 h-6 bg-slate-900 rounded-full border-4 border-white shadow-lg z-10"></div>
-        {/* Destination Pin */}
-        <div className="absolute top-[20%] right-[20%] text-[#e11d48] z-10">
-          <MapPin size={40} fill="white" />
-        </div>
-
-        {/* Scooter Icon moving along path (approximate visual) */}
-        <motion.div 
-          className="absolute z-20 w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl text-rose-600"
-          initial={{ left: '20%', top: '80%' }}
-          animate={{ 
-            left: `${20 + (60 * progressPercentage/100)}%`, 
-            top: `${80 - (60 * progressPercentage/100)}%` 
-          }}
-          transition={{ duration: 0.5 }}
+      {/* Map Section */}
+      <div className="w-full md:w-1/2 h-[50vh] md:h-full relative overflow-hidden z-0 bg-slate-800">
+        <MapContainer 
+          center={deliveryPos} 
+          zoom={14} 
+          style={{ height: '100%', width: '100%' }}
+          zoomControl={false}
         >
-          <Truck size={24} />
-        </motion.div>
+           <TileLayer
+             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+           />
+           <MapUpdater center={deliveryPos} />
+
+           <Marker position={storePos} icon={startIcon} />
+           <Marker position={userPos} icon={createCustomIcon('#10b981')} /> {/* Green dot for User */}
+           <Marker position={deliveryPos} icon={deliveryIcon} />
+           
+           {/* Visual Route Guideline from Delivery to User */}
+           <Polyline positions={[deliveryPos, userPos]} pathOptions={{ color: '#e11d48', weight: 4, dashArray: '10, 10' }} />
+        </MapContainer>
       </div>
 
-      {/* Tracking Details */}
+      {/* Tracking Details Overlay */}
       <div className="w-full md:w-1/2 p-8 md:p-12 overflow-y-auto bg-white flex flex-col h-full rounded-t-[3rem] md:rounded-l-[3rem] -mt-8 md:mt-0 relative z-10 shadow-[0_-20px_50px_rgba(0,0,0,0.1)] md:shadow-none">
         
         <div className="bg-rose-50 text-rose-600 px-4 py-2 rounded-full w-max text-xs font-black uppercase tracking-widest mb-6">
@@ -116,7 +164,7 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
         <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tight mb-2">Order {orderId}</h2>
         <div className="flex items-center gap-2 text-slate-500 font-bold mb-8">
           <Clock size={16} />
-          {stage === 4 ? <span>Delivered Successfully</span> : <span>ETA: {timeLeft} Minutes</span>}
+          {stage === 4 ? <span className="text-emerald-500">Delivered Successfully</span> : <span>ETA: {timeLeft} Minutes</span>}
         </div>
 
         {/* Timeline */}
@@ -152,7 +200,6 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
                     <h3 className={`text-lg font-black uppercase ${isActive ? 'text-emerald-600' : 'text-slate-900'}`}>
                       {step.title}
                     </h3>
-                    <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">{step.time}</p>
                   </div>
 
                   {isActive && (
@@ -178,7 +225,6 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
           </motion.button>
         )}
       </div>
-
     </motion.div>
   );
 }

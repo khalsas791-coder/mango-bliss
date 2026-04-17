@@ -6,6 +6,8 @@ export const paymentService = {
     amount: number;
     customerName: string;
     paymentMethod: string;
+    userLat?: number;
+    userLng?: number;
   }) => {
     const response = await fetch(`${API_URL}/orders/create`, {
       method: 'POST',
@@ -40,6 +42,20 @@ export const paymentService = {
 
   getStats: async () => {
     const response = await fetch(`${API_URL}/admin/stats`);
+    return response.json();
+  },
+
+  getOrderDetails: async (orderId: string) => {
+    const response = await fetch(`${API_URL}/orders/${orderId}`);
+    return response.json();
+  },
+
+  forceStatusAdmin: async (orderId: string, statusPhase: string) => {
+    const response = await fetch(`${API_URL}/admin/force-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, statusPhase }),
+    });
     return response.json();
   }
 };

@@ -38,12 +38,28 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
   const handlePayment = async (method: string) => {
     setStep('processing');
     
+    // Attempt Geolocation coordinates
+    let userLat = 17.9254;
+    let userLng = 77.5187; // fallback GNDECB start
+
+    try {
+       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+       });
+       userLat = position.coords.latitude;
+       userLng = position.coords.longitude;
+    } catch(err) {
+       console.warn("GPS failed, using fallback location:", err);
+    }
+
     try {
       const orderRes = await paymentService.createOrder({
         productName: `Mango Bliss: ${productInfo.flavorName}`,
         amount: total,
         customerName: customer.name,
         paymentMethod: method,
+        userLat,
+        userLng
       });
 
       if (!orderRes.success) throw new Error("Order creation failed");

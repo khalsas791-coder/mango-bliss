@@ -20,9 +20,11 @@ import {
   Eye,
   EyeOff,
   Copy,
-  Check
+  Check,
+  LogOut
 } from 'lucide-react';
 import { paymentService } from '../services/paymentService';
+import { AdminLogin } from './AdminLogin';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -88,6 +90,21 @@ function formatDate(ts: string | Date): string {
 // ─────────────────────────── Component ───────────────────────────
 
 export function AdminDashboard({ onClose }: { onClose: () => void }) {
+  // ── Admin Auth Gate ──
+  const [adminToken, setAdminToken] = useState<string | null>(
+    () => sessionStorage.getItem('adminToken')
+  );
+
+  const handleAdminLogin = (token: string) => {
+    sessionStorage.setItem('adminToken', token);
+    setAdminToken(token);
+  };
+
+  const handleAdminLogout = () => {
+    sessionStorage.removeItem('adminToken');
+    setAdminToken(null);
+  };
+
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'analytics' | 'delivery' | 'users' | 'locations'>('analytics');
@@ -97,7 +114,7 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [darkMap, setDarkMap] = useState(true);
   const [liveIds, setLiveIds] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const liveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const liveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>();
 
   useEffect(() => {
     fetchAll();
@@ -106,11 +123,15 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
   }, []);
 
   const fetchAll = async () => {
+    if (!sessionStorage.getItem('adminToken')) return;
     try {
+      const token = sessionStorage.getItem('adminToken') || '';
       const [statsData, locData, userData] = await Promise.all([
         paymentService.getStats(),
         fetch(`${API_URL}/location/all`).then(r => r.json()),
-        fetch(`${API_URL}/admin/users`).then(r => r.json())
+        fetch(`${API_URL}/admin/users`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).then(r => r.json())
       ]);
       setStats(statsData);
       if (locData.success) setFleetLocations(locData.locations);
@@ -179,6 +200,18 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
     </div>
   );
 
+  // ── Login gate ──
+  if (!adminToken) {
+    return (
+      <AnimatePresence>
+        <AdminLogin
+          onSuccess={handleAdminLogin}
+          onClose={onClose}
+        />
+      </AnimatePresence>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[500] bg-slate-50 overflow-y-auto">
       <div className="max-w-7xl mx-auto px-6 md:px-12 py-8">
@@ -196,14 +229,23 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
               </span>
             </div>
           </div>
-          <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-3">
-            <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white">
-              <CheckCircle2 size={20} />
+          <div className="flex items-center gap-3">
+            <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-3">
+              <div className="w-10 h-10 bg-rose-500 rounded-full flex items-center justify-center text-white">
+                <Lock size={18} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Signed in as</p>
+                <p className="text-sm font-black text-slate-900">Admin</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">System</p>
-              <p className="text-sm font-black text-slate-900">OPERATIONAL</p>
-            </div>
+            <button
+              onClick={handleAdminLogout}
+              className="flex items-center gap-2 px-5 py-4 bg-white border border-slate-100 rounded-3xl font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all shadow-sm"
+              title="Sign out of admin"
+            >
+              <LogOut size={16} />Sign Out
+            </button>
           </div>
         </header>
 

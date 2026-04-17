@@ -1,5 +1,13 @@
 import { API_URL } from '../config';
 
+// Helper: get stored admin token
+const getAdminToken = () => sessionStorage.getItem('adminToken') || '';
+
+const authHeader = () => ({
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${getAdminToken()}`
+});
+
 export const paymentService = {
   createOrder: async (orderData: {
     productName: string;
@@ -41,8 +49,12 @@ export const paymentService = {
     return response.json();
   },
 
+  // ── Admin-protected endpoints (require admin JWT) ──
+
   getStats: async () => {
-    const response = await fetch(`${API_URL}/admin/stats`);
+    const response = await fetch(`${API_URL}/admin/stats`, {
+      headers: { 'Authorization': `Bearer ${getAdminToken()}` }
+    });
     return response.json();
   },
 
@@ -54,7 +66,7 @@ export const paymentService = {
   forceStatusAdmin: async (orderId: string, statusPhase: string) => {
     const response = await fetch(`${API_URL}/admin/force-status`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeader(),
       body: JSON.stringify({ orderId, statusPhase }),
     });
     return response.json();

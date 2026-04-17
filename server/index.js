@@ -169,6 +169,70 @@ const razorpay = new Razorpay({
 // Mount specialized routes
 app.use('/api/auth', authRoutes);
 
+// --- Admin Login Endpoint (public — no auth needed) ---
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required.' });
+    }
+
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'khalsas791@gmail.com';
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'khalsa@11';
+
+    const bcrypt = await import('bcryptjs');
+    const jwt = await import('jsonwebtoken');
+
+    const emailMatch = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    // Compare directly if stored as plaintext, or as hash
+    let passMatch = false;
+    if (ADMIN_PASSWORD.startsWith('$2')) {
+      // It's a bcrypt hash
+      passMatch = await bcrypt.default.compare(password, ADMIN_PASSWORD);
+    } else {
+      // Plaintext comparison (dev mode)
+      passMatch = password === ADMIN_PASSWORD;
+    }
+
+    if (!emailMatch || !passMatch) {
+      console.warn(`[Admin] Failed login attempt for: ${email}`);
+      return res.status(401).json({ success: false, message: 'Invalid admin credentials.' });
+    }
+
+    const token = jwt.default.sign(
+      { role: 'admin', email: ADMIN_EMAIL },
+      process.env.JWT_SECRET || 'mango-bliss-jwt-secret-2024',
+      { expiresIn: '8h' }
+    );
+
+    console.log(`✅ [Admin] Successful login: ${email}`);
+    res.status(200).json({ success: true, token, message: 'Admin login successful' });
+  } catch (err) {
+    console.error('[Admin] Login error:', err.message);
+    res.status(500).json({ success: false, message: 'Server error during login.' });
+  }
+});
+
+// --- Admin JWT Middleware ---
+const adminAuthMiddleware = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'Admin token required.' });
+    }
+    const token = authHeader.split(' ')[1];
+    const jwt = await import('jsonwebtoken');
+    const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'mango-bliss-jwt-secret-2024');
+    if (decoded.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied. Not an admin.' });
+    }
+    req.admin = decoded;
+    next();
+  } catch {
+    return res.status(401).json({ success: false, message: 'Invalid or expired admin token.' });
+  }
+};
+
 // --- WebSocket Event Handling ---
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
@@ -387,7 +451,7 @@ app.post('/api/orders/verify', async (req, res) => {
   }
 });
 
-app.post('/api/admin/force-status', async (req, res) => {
+app.post('/api/admin/force-status', adminAuthMiddleware, async (req, res) => {
   try {
     const { orderId, statusPhase } = req.body;
     
@@ -412,7 +476,7 @@ app.post('/api/admin/force-status', async (req, res) => {
   }
 });
 
-app.get('/api/admin/stats', async (req, res) => {
+app.get('/api/admin/stats', adminAuthMiddleware, async (req, res) => {
   try {
     const orders = await Order.find().sort({ createdAt: -1 });
     
@@ -433,7 +497,7 @@ app.get('/api/admin/stats', async (req, res) => {
 });
 
 // --- Admin: All Registered Users ---
-app.get('/api/admin/users', async (req, res) => {
+app.get('/api/admin/users', adminAuthMiddleware, async (req, res) => {
   try {
     const User = (await import('./models/User.js')).default;
     // Select all fields except password hash

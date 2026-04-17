@@ -384,11 +384,26 @@ app.get('/api/orders/:id', (req, res) => {
    }
 });
 
+// --- API 404 Handler ---
+// This ensures that any /api route that isn't matched returns a JSON error
+// instead of the SPA's index.html for GET requests or a generic Express 404 for others.
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `API endpoint not found: ${req.method} ${req.originalUrl}`
+  });
+});
+
 // --- Catch-All Route (Must be last) ---
 app.get('*', (req, res) => {
   const indexPath = path.join(__dirname, '../dist/index.html');
+  if (path.extname(req.path) || req.path.startsWith('/api')) {
+    // If it's a static file request (with extension) or an API request that slipped through
+    return res.status(404).send('Not Found');
+  }
   res.sendFile(indexPath);
 });
+
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {

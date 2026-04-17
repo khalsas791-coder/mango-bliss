@@ -32,23 +32,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await authService.login(email, password);
-      if (res.success) {
-        localStorage.setItem('mango_bliss_token', res.token);
-        set({
-          user: res.user,
-          token: res.token,
-          isAuthenticated: true,
+      const data = await authService.login(email, password);
+      if (data.success) {
+        const { token, user } = data;
+        localStorage.setItem('mango_bliss_token', token);
+        set({ 
+          token, 
+          user, 
+          isAuthenticated: true, 
           isLoading: false,
-          error: null,
+          error: null 
         });
         return true;
       } else {
-        set({ isLoading: false, error: res.message });
+        set({ isLoading: false, error: data.message || 'Login failed' });
         return false;
       }
-    } catch (err) {
-      set({ isLoading: false, error: 'Network error. Please check your connection.' });
+    } catch (err: any) {
+      console.error('Login operation failed:', err);
+      const message = err.message || 'Network error. Please check your connection and DB status.';
+      set({ isLoading: false, error: message });
       return false;
     }
   },
@@ -56,23 +59,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (name: string, email: string, password: string) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await authService.register(name, email, password);
-      if (res.success) {
-        localStorage.setItem('mango_bliss_token', res.token);
-        set({
-          user: res.user,
-          token: res.token,
-          isAuthenticated: true,
+      const data = await authService.register(name, email, password);
+      if (data.success) {
+        const { token, user } = data;
+        localStorage.setItem('mango_bliss_token', token);
+        set({ 
+          token, 
+          user, 
+          isAuthenticated: true, 
           isLoading: false,
-          error: null,
+          error: null 
         });
         return true;
       } else {
-        set({ isLoading: false, error: res.message });
+        set({ isLoading: false, error: data.message || 'Signup failed' });
         return false;
       }
-    } catch (err) {
-      set({ isLoading: false, error: 'Network error. Please check your connection.' });
+    } catch (err: any) {
+      console.error('Signup operation failed:', err);
+      // If we have a response it's not a true network error, but the service might have failed to catch it
+      const message = err.message || 'Network error. Please check your connection and DB status.';
+      set({ isLoading: false, error: message });
       return false;
     }
   },

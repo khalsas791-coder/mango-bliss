@@ -29,7 +29,26 @@ mongoose.connect(MONGODB_URI)
   .catch((err) => console.warn('⚠️ MongoDB connection failed (auth features will be unavailable):', err.message));
 
 // --- Auth Routes ---
-app.use('/api/auth', authRoutes);
+// Health middleware to check MongoDB connection before processing auth requests
+app.use('/api/auth', (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection not established. Please verify MONGODB_URI in environment variables.'
+    });
+  }
+  next();
+}, authRoutes);
+
+// --- Health Check Endpoint ---
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'online',
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    sqlite: db.open ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // --- Static File Serving (Production) ---
 const distPath = path.join(__dirname, '../dist');

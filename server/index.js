@@ -64,24 +64,25 @@ async function connectDB() {
 // Initial connection attempt
 connectDB().catch(() => {});
 
-// --- Auth Routes ---
-// Health middleware to check MongoDB connection before processing auth requests
-app.use('/api/auth', async (req, res, next) => {
+// --- API Global Middleware ---
+// Health middleware to check MongoDB connection before processing ANY /api request
+app.use('/api', async (req, res, next) => {
   try {
     // Wait for database connection if it's still connecting
-    if (mongoose.connection.readyState !== 1) {
-      console.log('⏳ [Middleware] Database not ready, waiting for connection...');
+    if (!isConnected || mongoose.connection.readyState !== 1) {
+      console.log('⏳ [API Middleware] Database not ready, waiting for connection...');
       await connectDB();
     }
     next();
   } catch (err) {
+    console.error('❌ [API Middleware] Database health check failed:', err.message);
     return res.status(503).json({
       success: false,
       message: 'Database connection not established. Please verify MONGODB_URI and Atlas IP Whitelist.',
       error: err.message
     });
   }
-}, authRoutes);
+});
 
 // --- Health Check Endpoint ---
 app.get('/api/health', (req, res) => {
@@ -114,6 +115,9 @@ const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
   key_secret: process.env.RAZORPAY_KEY_SECRET || 'secret_placeholder',
 });
+
+// Mount specialized routes
+app.use('/api/auth', authRoutes);
 
 // --- WebSocket Event Handling ---
 io.on('connection', (socket) => {
@@ -257,6 +261,7 @@ app.post('/api/orders/create', async (req, res) => {
     };
 
     const order = await Order.create(orderData);
+    console.log(`✅ [Order] Created successfully: ${systemOrderId}`);
 
     res.status(200).json({
       success: true,
@@ -264,7 +269,11 @@ app.post('/api/orders/create', async (req, res) => {
       razorpayOrder
     });
   } catch (error) {
-    console.error("Order creation error:", error);
+    console.error("❌ [Order] Creation error details:", {
+      message: error.message,
+      stack: error.stack,
+      body: req.body
+    });
     res.status(500).json({ success: false, message: error.message });
   }
 });

@@ -57,7 +57,7 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
 
     try {
        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000, maximumAge: 10000 });
        });
        userLat = position.coords.latitude;
        userLng = position.coords.longitude;
@@ -80,7 +80,7 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
 
       const systemOrderId = orderRes.order.systemOrderId;
 
-      if (method === 'cod') {
+      if (method === 'cod' || method === 'upi') {
          setTimeout(() => {
            setStep('success');
            setTimeout(() => onPaymentSuccess(systemOrderId), 2000);

@@ -230,11 +230,23 @@ app.post('/api/orders/create', async (req, res) => {
 
     let razorpayOrder = null;
     if (paymentMethod !== 'cod') {
-      if (!process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID === 'rzp_test_placeholder') {
+      try {
+        if (!process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID === 'rzp_test_placeholder') {
+          console.log("ℹ️ [Razorpay] Using mock order ID (No valid keys found)");
+          razorpayOrder = { id: `order_mock_${Date.now()}` };
+        } else {
+          razorpayOrder = await razorpay.orders.create(options);
+        }
+      } catch (rzpErr) {
+        console.error("⚠️ [Razorpay] Order creation failed, falling back to mock:", rzpErr.message);
         razorpayOrder = { id: `order_mock_${Date.now()}` };
-      } else {
-        razorpayOrder = await razorpay.orders.create(options);
       }
+    }
+
+    // Defensive userId Sanitization
+    let cleanUserId = null;
+    if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+      cleanUserId = userId;
     }
 
     // Default pickup coords from GNDECB (approx: 17.9254, 77.5187)
@@ -257,7 +269,7 @@ app.post('/api/orders/create', async (req, res) => {
       deliveryLng: startLng,
       statusPhase: initPhase,
       etaMinutes: 25,
-      userId: userId || null
+      userId: cleanUserId
     };
 
     const order = await Order.create(orderData);

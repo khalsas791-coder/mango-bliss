@@ -32,7 +32,9 @@ mongoose.connect(MONGODB_URI)
 app.use('/api/auth', authRoutes);
 
 // --- Static File Serving (Production) ---
-app.use(express.static(path.join(__dirname, '../dist')));
+const distPath = path.join(__dirname, '../dist');
+console.log(`📡 Serving static files from: ${distPath}`);
+app.use(express.static(distPath));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -355,7 +357,8 @@ app.get('/api/orders/:id', (req, res) => {
 
 // --- Catch-All Route (Must be last) ---
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
+  const indexPath = path.join(__dirname, '../dist/index.html');
+  res.sendFile(indexPath);
 });
 
 const PORT = process.env.PORT || 5000;

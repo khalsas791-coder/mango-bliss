@@ -6,6 +6,10 @@ const locationSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  userName: {
+    type: String,
+    default: 'Guest'
+  },
   orderId: {
     type: String,
     required: true,

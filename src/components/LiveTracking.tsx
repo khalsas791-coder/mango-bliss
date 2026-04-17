@@ -26,6 +26,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { io, Socket } from 'socket.io-client';
 import { io, Socket } from 'socket.io-client';
+import { useAuthStore } from '../store/authStore';
 import { API_URL, SOCKET_URL } from '../config';
 
 interface LiveTrackingProps {
@@ -143,6 +144,8 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
   const [driverDistance, setDriverDistance] = useState<number | null>(null);
   const toastIdRef = useRef(0);
   const watchId = useRef<number | null>(null);
+  const hasSyncedRef = useRef(false);
+  const { user } = useAuthStore();
 
   // Delivery scooter positions
   const [targetPos, setTargetPos] = useState<[number, number]>(GNDECB_POS);
@@ -218,12 +221,17 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               userId: localStorage.getItem('userId') || 'guest',
+              userName: user?.name || 'Guest User',
               orderId,
               latitude,
               longitude
             })
           });
-          addToast('📡 Location synced to server', 'info');
+          
+          if (!hasSyncedRef.current) {
+            addToast('📡 Location synced to server seamlessly', 'info');
+            hasSyncedRef.current = true;
+          }
         } catch {
           // silent fail
         }

@@ -521,12 +521,12 @@ app.get('/api/orders/:id', async (req, res) => {
 // --- User Location Endpoints ---
 app.post('/api/location/update', async (req, res) => {
   try {
-    const { userId, orderId, latitude, longitude } = req.body;
+    const { userId, userName, orderId, latitude, longitude } = req.body;
     
     // Update or create location record
     const location = await Location.findOneAndUpdate(
       { orderId },
-      { userId, latitude, longitude, timestamp: Date.now() },
+      { userId, userName, latitude, longitude, timestamp: Date.now() },
       { upsert: true, new: true }
     );
 

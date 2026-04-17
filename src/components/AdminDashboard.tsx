@@ -468,7 +468,7 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-[11px] text-slate-600 font-bold"><span className="text-slate-400">User:</span> {loc.userId}</p>
+                                <p className="text-[11px] text-slate-600 font-bold"><span className="text-slate-400">User:</span> {loc.userName || loc.userId}</p>
                                 <p className="text-[11px] text-slate-600 font-bold"><span className="text-slate-400">Lat:</span> {Number(loc.latitude).toFixed(6)}</p>
                                 <p className="text-[11px] text-slate-600 font-bold"><span className="text-slate-400">Lng:</span> {Number(loc.longitude).toFixed(6)}</p>
                                 <p className="text-[10px] text-rose-500 font-black mt-2 uppercase">{loc.timestamp ? timeAgo(loc.timestamp) : '—'}</p>
@@ -511,7 +511,7 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
                                   <div className="flex items-center gap-2 mb-1">
                                     <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
                                     <p className="font-black text-slate-900 text-xs uppercase truncate">
-                                      {loc.userId === 'guest' ? 'Guest User' : loc.userId}
+                                      {loc.userName || (loc.userId === 'guest' ? 'Guest User' : loc.userId)}
                                     </p>
                                   </div>
                                   <p className="text-[10px] text-slate-400 font-bold ml-4 truncate">{loc.orderId}</p>

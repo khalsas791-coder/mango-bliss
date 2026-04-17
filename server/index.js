@@ -28,11 +28,22 @@ app.use((req, res, next) => {
 });
 
 // --- MongoDB Connection ---
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mango-bliss';
+let MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mango-bliss';
+
+// Sanitization: Remove potential "MONGODB_URI=" prefix if user pasted it by mistake
+if (MONGODB_URI.startsWith('MONGODB_URI=')) {
+  console.log('🔧 [Diagnostic] Cleaning malformed MONGODB_URI prefix');
+  MONGODB_URI = MONGODB_URI.replace('MONGODB_URI=', '');
+}
 
 mongoose.connect(MONGODB_URI)
   .then(() => console.log('✅ MongoDB connected successfully'))
-  .catch((err) => console.warn('⚠️ MongoDB connection failed (auth features will be unavailable):', err.message));
+  .catch((err) => {
+    console.error('❌ MongoDB Connection ERROR:', err.message);
+    if (err.message.includes('Invalid scheme')) {
+      console.error('💡 TIP: Your MONGODB_URI might be malformed. Ensure you didn\'t include the "MONGODB_URI=" prefix in Vercel settings.');
+    }
+  });
 
 // --- Auth Routes ---
 // Health middleware to check MongoDB connection before processing auth requests
@@ -71,7 +82,14 @@ const io = new Server(httpServer, {
 });
 
 // --- Database Initialization ---
-const db = new Database('./mango-bliss.db');
+// On Vercel, the filesystem is read-only. We must use /tmp for SQLite writes.
+const isVercel = process.env.VERCEL === '1' || !!process.env.VERCEL;
+const dbPath = isVercel ? '/tmp/mango-bliss.db' : './mango-bliss.db';
+
+let db;
+try {
+  console.log(`📦 Initializing SQLite at: ${dbPath}`);
+  db = new Database(dbPath);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS orders (
@@ -103,7 +121,20 @@ try { db.exec("ALTER TABLE orders ADD COLUMN deliveryLat REAL"); } catch {}
 try { db.exec("ALTER TABLE orders ADD COLUMN deliveryLng REAL"); } catch {}
 try { db.exec("ALTER TABLE orders ADD COLUMN statusPhase TEXT"); } catch {}
 try { db.exec("ALTER TABLE orders ADD COLUMN etaMinutes INTEGER"); } catch {}
-try { db.exec("ALTER TABLE orders ADD COLUMN userId TEXT"); } catch {}
+  try { db.exec("ALTER TABLE orders ADD COLUMN userId TEXT"); } catch {}
+} catch (error) {
+  console.error('❌ SQLite Initialization Failed:', error.message);
+  // Create a mock db object to prevent crashes on missing routes
+  db = {
+    prepare: () => ({ 
+      run: () => ({ changes: 0 }), 
+      get: () => null, 
+      all: () => [] 
+    }),
+    exec: () => {},
+    open: false
+  };
+}
 
 // --- Razorpay Initialization ---
 const razorpay = new Razorpay({

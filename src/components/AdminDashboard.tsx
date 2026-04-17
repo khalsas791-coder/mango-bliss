@@ -11,11 +11,40 @@ import {
   MapPin
 } from 'lucide-react';
 import { paymentService } from '../services/paymentService';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { io, Socket } from 'socket.io-client';
+import { SOCKET_URL, API_URL } from '../config';
+
+// Custom icons for admin map
+const createAdminUserIcon = (color: string) => L.divIcon({
+  className: 'custom-admin-icon',
+  html: `
+    <div class="relative flex items-center justify-center">
+      <div class="absolute w-8 h-8 ${color}/20 rounded-full animate-ping"></div>
+      <div class="relative w-4 h-4 ${color} rounded-full border-2 border-white shadow-lg"></div>
+    </div>
+  `,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16]
+});
+
+function MapFocus({ center }: { center: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (center) map.flyTo(center, 15);
+  }, [center]);
+  return null;
+}
 
 export function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'analytics' | 'delivery'>('analytics');
+  const [fleetLocations, setFleetLocations] = useState<any[]>([]);
+  const [focusPos, setFocusPos] = useState<[number, number] | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
     fetchStats();
@@ -28,12 +57,38 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
     try {
       const data = await paymentService.getStats();
       setStats(data);
+      
+      // Fetch initial fleet locations
+      const resp = await fetch(`${API_URL}/location/all`);
+      const locData = await resp.json();
+      if (locData.success) {
+        setFleetLocations(locData.locations);
+      }
     } catch (err) {
       console.error("Failed to fetch stats", err);
     } finally {
       if (loading) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const newSocket = io(SOCKET_URL);
+    setSocket(newSocket);
+
+    newSocket.on('fleetUpdate', (update) => {
+      setFleetLocations(prev => {
+        const index = prev.findIndex(l => l.orderId === update.orderId);
+        if (index > -1) {
+          const newLocs = [...prev];
+          newLocs[index] = { ...newLocs[index], ...update, timestamp: new Date() };
+          return newLocs;
+        }
+        return [...prev, { ...update, timestamp: new Date() }];
+      });
+    });
+
+    return () => { newSocket.disconnect(); };
+  }, []);
 
   const handleForceStatus = async (orderId: string, status: string) => {
     await paymentService.forceStatusAdmin(orderId, status);
@@ -141,19 +196,69 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
                       <MapPin size={48} className="mx-auto text-slate-200 mb-4" />
                       <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">No active shipments in transit.</p>
                     </div>
-                  ) : (
-                    <div className="space-y-6">
+                  ) :                     <div className="space-y-6">
+                      {/* Active Fleet Map */}
+                      <div className="h-[400px] w-full rounded-[2.5rem] overflow-hidden border-4 border-slate-50 shadow-inner mb-8 bg-slate-100 relative z-0">
+                        <MapContainer 
+                          center={[17.9254, 77.5187]} 
+                          zoom={13} 
+                          style={{ height: '100%', width: '100%' }}
+                          attributionControl={false}
+                        >
+                          <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
+                          <MapFocus center={focusPos} />
+                          {fleetLocations.map((loc) => (
+                            <Marker 
+                              key={loc.orderId} 
+                              position={[loc.latitude, loc.longitude]} 
+                              icon={createAdminUserIcon('bg-rose-500')}
+                            >
+                              <Popup>
+                                <div className="p-2">
+                                  <p className="font-black text-slate-900 border-b pb-1 mb-2 uppercase text-xs">{loc.orderId}</p>
+                                  <p className="text-[10px] font-bold text-slate-400">USER: {loc.userId}</p>
+                                  <p className="text-[10px] font-bold text-slate-400">LAT: {loc.latitude.toFixed(4)}</p>
+                                  <p className="text-[10px] font-bold text-slate-400">LNG: {loc.longitude.toFixed(4)}</p>
+                                  <p className="text-[10px] font-black text-rose-500 mt-1">LATEST UPDATE RECEIVED</p>
+                                </div>
+                              </Popup>
+                            </Marker>
+                          ))}
+                        </MapContainer>
+                      </div>
+
+                      <h4 className="font-display font-black text-xl text-slate-900 uppercase mt-8 mb-4">Shipment Details</h4>
                       {stats?.recentOrders?.filter((o: any) => o.statusPhase && o.statusPhase !== 'delivered').map((order: any) => (
                         <div key={order.systemOrderId} className="flex flex-wrap items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 gap-4">
                           <div>
-                            <span className="text-xs font-black bg-rose-100 text-rose-600 px-3 py-1 rounded-full uppercase tracking-widest">
-                              {order.systemOrderId}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black bg-rose-100 text-rose-600 px-3 py-1 rounded-full uppercase tracking-widest">
+                                {order.systemOrderId}
+                              </span>
+                              {fleetLocations.some(l => l.orderId === order.systemOrderId) && (
+                                <span className="flex items-center gap-1 text-[10px] font-black text-emerald-500 uppercase tracking-tighter">
+                                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                  Live Coords
+                                </span>
+                              )}
+                            </div>
                             <h4 className="text-lg font-black text-slate-900 mt-2">{order.customerName}</h4>
                             <p className="text-sm font-bold text-slate-400">Phase: {order.statusPhase.replace('_', ' ').toUpperCase()}</p>
                           </div>
                           
                           <div className="flex items-center gap-3">
+                             {fleetLocations.some(l => l.orderId === order.systemOrderId) && (
+                               <button 
+                                 onClick={() => {
+                                   const loc = fleetLocations.find(l => l.orderId === order.systemOrderId);
+                                   if (loc) setFocusPos([loc.latitude, loc.longitude]);
+                                 }}
+                                 className="w-12 h-12 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-rose-500 hover:bg-rose-50 transition-colors"
+                               >
+                                 <LocateFixed size={20} />
+                               </button>
+                             )}
+
                              <div className="flex flex-col items-center justify-center px-6 py-2 bg-white rounded-2xl shadow-sm border border-slate-100">
                                 <span className="text-xs text-slate-400 uppercase font-black tracking-widest">ETA</span>
                                 <span className="font-black text-xl text-slate-900">{order.etaMinutes}m</span>
@@ -169,6 +274,7 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
                         </div>
                       ))}
                     </div>
+>
                   )}
 
                 </div>

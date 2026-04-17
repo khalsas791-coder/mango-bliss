@@ -12,7 +12,9 @@ import {
   Star, 
   MessageSquare,
   ShieldCheck,
-  Zap
+  Zap,
+  Navigation,
+  LocateFixed
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -98,6 +100,9 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
   const [stage, setStage] = useState(0); 
   const [timeLeft, setTimeLeft] = useState(25);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [isTrackingUser, setIsTrackingUser] = useState(false);
+  const [distance, setDistance] = useState<number | null>(null);
+  const watchId = useRef<number | null>(null);
   
   // Real Target Pos from server
   const [targetPos, setTargetPos] = useState<[number, number]>([17.9254, 77.5187]);
@@ -117,6 +122,72 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
     'out_for_delivery': 3,
     'delivered': 4
   };
+
+  // Geolocation Tracking Logic
+  const toggleTracking = () => {
+    if (isTrackingUser) {
+      if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+      watchId.current = null;
+      setIsTrackingUser(false);
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+
+    setIsTrackingUser(true);
+    watchId.current = navigator.geolocation.watchPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserPos([latitude, longitude]);
+        
+        // Update DB
+        try {
+          await fetch(`${API_URL}/location/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: localStorage.getItem('userId') || 'guest',
+              orderId: orderId,
+              latitude,
+              longitude
+            })
+          });
+        } catch (err) {
+          console.error("Location update failed", err);
+        }
+      },
+      (error) => {
+        console.error("Geolocation error", error);
+        setIsTrackingUser(false);
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    );
+  };
+
+  // Distance Calculation (Haversine)
+  useEffect(() => {
+    const R = 6371e3; // metres
+    const φ1 = interpPos[0] * Math.PI/180;
+    const φ2 = userPos[0] * Math.PI/180;
+    const Δφ = (userPos[0]-interpPos[0]) * Math.PI/180;
+    const Δλ = (userPos[1]-interpPos[1]) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const d = R * c;
+    setDistance(Math.round(d));
+  }, [interpPos, userPos]);
+
+  useEffect(() => {
+    return () => {
+      if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+    };
+  }, []);
 
   // Interpolation logic
   useEffect(() => {
@@ -286,6 +357,41 @@ export function LiveTracking({ onClose, orderId }: LiveTrackingProps) {
               <Truck size={32} className="text-rose-600" />
            </div>
         </div>
+
+        {/* Live Tracking Toggle */}
+        <div className="mb-8">
+           <button 
+             onClick={toggleTracking}
+             className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 transition-all ${
+               isTrackingUser 
+               ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' 
+               : 'bg-slate-900 text-white'
+             }`}
+           >
+             {isTrackingUser ? <LocateFixed size={20} /> : <Navigation size={20} />}
+             {isTrackingUser ? 'Live Tracking Active' : 'Enable Live Tracking'}
+           </button>
+           {isTrackingUser && (
+             <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest text-center mt-2 flex items-center justify-center gap-1">
+               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+               Sharing your location for accurate delivery
+             </p>
+           )}
+        </div>
+
+        {distance !== null && (
+          <div className="bg-rose-50 p-6 rounded-[2rem] mb-6 flex justify-between items-center border border-rose-100/50">
+             <div>
+               <p className="text-xs font-bold text-rose-400 uppercase tracking-widest mb-1">Live Distance</p>
+               <h4 className="text-2xl font-black text-rose-600">
+                 {distance > 1000 ? `${(distance/1000).toFixed(1)} km` : `${distance} m`}
+               </h4>
+             </div>
+             <div className="text-rose-200">
+                <Truck size={40} />
+             </div>
+          </div>
+        )}
 
         {/* Progress Timeline */}
         <div className="bg-slate-50 p-6 rounded-[2rem] mb-8 relative overflow-hidden">

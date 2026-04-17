@@ -9,6 +9,7 @@ import { Server } from 'socket.io';
 import mongoose from 'mongoose';
 import authRoutes from './routes/authRoutes.js';
 import Order from './models/Order.js';
+import Location from './models/Location.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -368,6 +369,55 @@ app.get('/api/orders/:id', async (req, res) => {
    } catch(err) {
      res.status(500).json({ success: false, message: err.message });
    }
+});
+
+// --- User Location Endpoints ---
+app.post('/api/location/update', async (req, res) => {
+  try {
+    const { userId, orderId, latitude, longitude } = req.body;
+    
+    // Update or create location record
+    const location = await Location.findOneAndUpdate(
+      { orderId },
+      { userId, latitude, longitude, timestamp: Date.now() },
+      { upsert: true, new: true }
+    );
+
+    // Also update the order's user coordinates for routing
+    await Order.findOneAndUpdate(
+      { systemOrderId: orderId },
+      { userLat: latitude, userLng: longitude }
+    );
+
+    // Broadcast to the specifically interested order room
+    io.to(orderId).emit('userLocationUpdate', { latitude, longitude });
+    
+    // Broadcast globally for the admin fleet map
+    io.emit('fleetUpdate', { orderId, userId, latitude, longitude });
+
+    res.status(200).json({ success: true, location });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/location/all', async (req, res) => {
+  try {
+    const locations = await Location.find().sort({ timestamp: -1 });
+    res.status(200).json({ success: true, locations });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.get('/api/location/:userId', async (req, res) => {
+  try {
+    const location = await Location.findOne({ userId: req.params.userId }).sort({ timestamp: -1 });
+    if (location) res.status(200).json({ success: true, location });
+    else res.status(404).json({ success: false, message: "Location not found" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 });
 
 // --- API 404 Handler ---

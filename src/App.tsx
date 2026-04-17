@@ -65,26 +65,6 @@ export default function App() {
                     <span className="font-display font-bold text-xl tracking-tight">MANGO BLISS</span>
                   </div>
 
-                  {/* User Profile in Navbar */}
-                  <div className="absolute top-10 right-24 flex items-center gap-4 group">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-white/50 text-[10px] font-bold uppercase tracking-widest">Welcome back</p>
-                      <p className="text-white font-bold text-sm tracking-tight">{user?.name}</p>
-                    </div>
-                    <div className="relative">
-                      <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-full border border-white/20 flex items-center justify-center text-white group-hover:bg-white/20 transition-all">
-                        <UserIcon size={18} />
-                      </div>
-                      <button 
-                        onClick={logout}
-                        title="Sign Out"
-                        className="absolute -bottom-2 -right-2 w-6 h-6 bg-rose-600 rounded-full flex items-center justify-center text-white border-2 border-[#e11d48] hover:scale-110 transition-transform shadow-lg cursor-pointer"
-                      >
-                        <LogOut size={12} />
-                      </button>
-                    </div>
-                  </div>
-
                   <div className="w-full max-w-7xl mx-auto flex flex-col items-start">
                     <motion.div
                       initial={{ opacity: 0, x: -100 }}
@@ -238,28 +218,56 @@ export default function App() {
         </div>
       </div>
 
-      {/* Top-right action buttons: Admin + Configurator */}
-      <div className="fixed top-10 right-10 z-50 flex items-center gap-3">
-        {/* Admin Button */}
-        <button
-          onClick={() => setIsAdminOpen(true)}
-          title="Admin Panel"
-          className="w-12 h-12 bg-slate-900/80 backdrop-blur-md rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 hover:bg-slate-900 transition-transform border border-white/10"
-        >
-          {/* Shield icon inline SVG */}
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          </svg>
-        </button>
+      {/* ── Integrated Top Action Bar ── */}
+      <div className="fixed top-6 right-6 z-[100] flex items-center bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[2rem] shadow-2xl p-1.5 hover:bg-white/[0.12] transition-colors">
+        
+        {/* User Profile Section */}
+        {user && (
+          <div className="flex items-center gap-3 px-4 py-1.5">
+            <div className="text-right hidden sm:block">
+              <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.2em] leading-none mb-1">Authenticated</p>
+              <p className="text-white font-black text-sm tracking-tight leading-none whitespace-nowrap">{user.name}</p>
+            </div>
+            <div className="relative group/user">
+              <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white border border-white/30 group-hover/user:bg-white/30 transition-all">
+                <UserIcon size={16} />
+              </div>
+              <button 
+                onClick={logout}
+                title="Sign Out"
+                className="absolute -bottom-1 -right-1 w-5 h-5 bg-rose-600 rounded-full flex items-center justify-center text-white border-2 border-white/10 hover:scale-110 hover:bg-rose-500 transition-all shadow-lg cursor-pointer z-10"
+              >
+                <LogOut size={10} />
+              </button>
+            </div>
+          </div>
+        )}
 
-        {/* Configurator Button */}
-        <button
-          onClick={() => setIsConfigOpen(true)}
-          title="Customize"
-          className="w-14 h-14 bg-white rounded-full shadow-2xl flex items-center justify-center text-[#e11d48] hover:scale-110 transition-transform"
-        >
-          <Settings2 size={28} />
-        </button>
+        {/* Vertical Divider */}
+        <div className="w-px h-8 bg-white/20 mx-1" />
+
+        {/* Action Controls Section */}
+        <div className="flex items-center gap-2 px-1">
+          {/* Admin Panel Access */}
+          <button
+            onClick={() => setIsAdminOpen(true)}
+            title="Admin Hub"
+            className="w-10 h-10 bg-slate-900 rounded-full flex items-center justify-center text-white hover:scale-110 hover:bg-black transition-all shadow-md active:scale-95"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </button>
+
+          {/* Configurator Access */}
+          <button
+            onClick={() => setIsConfigOpen(true)}
+            title="Customize Shake"
+            className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-rose-600 hover:scale-110 shadow-lg hover:shadow-white/20 transition-all active:scale-95 group/config"
+          >
+            <Settings2 size={22} className="group-hover/config:rotate-90 transition-transform duration-500" />
+          </button>
+        </div>
       </div>
 
 

@@ -432,6 +432,18 @@ app.get('/api/admin/stats', async (req, res) => {
   }
 });
 
+// --- Admin: All Registered Users ---
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const User = (await import('./models/User.js')).default;
+    // Select all fields except password hash
+    const users = await User.find({}, '-password').sort({ createdAt: -1 });
+    res.status(200).json({ success: true, users });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 app.get('/api/orders/:id', async (req, res) => {
    try {
      const order = await Order.findOne({ systemOrderId: req.params.id });

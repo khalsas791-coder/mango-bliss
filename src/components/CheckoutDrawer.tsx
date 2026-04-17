@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CreditCard, Truck, Smartphone, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { paymentService } from '../services/paymentService';
+import { v4 as uuidv4 } from 'uuid';
 
 interface CheckoutDrawerProps {
   onClose: () => void;
@@ -16,6 +18,15 @@ interface CheckoutDrawerProps {
 
 export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: CheckoutDrawerProps) {
   const [step, setStep] = useState<'details' | 'payment' | 'processing' | 'success'>('details');
+  const [customer, setCustomer] = useState({
+    name: 'John Doe',
+    phone: '9876543210',
+    email: 'john@example.com',
+    address: '123 Bliss Street, Flavor Town',
+    city: 'Mumbai',
+    state: 'MH',
+    pincode: '400001'
+  });
 
   const basePrice = 60.00;
   const subtotal = basePrice * productInfo.quantity;
@@ -24,29 +35,107 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
   const gst = 2.00;
   const total = subtotal - discount + delivery + gst;
 
-  const handlePayment = (method?: string) => {
-    if (method === 'phonepe') {
-      window.open('https://www.phonepe.com', '_blank');
-    }
-
+  const handlePayment = async (method: string) => {
     setStep('processing');
-    setTimeout(() => {
-      setStep('success');
-      const orderId = `#MB${Math.floor(1000 + Math.random() * 9000)}`;
-      
-      // Save order to simulation storage
-      const orderData = {
-        orderId,
-        date: new Date().toISOString(),
-        total: total.toFixed(2),
-        status: 'placed'
-      };
-      localStorage.setItem('latestOrder', JSON.stringify(orderData));
+    
+    try {
+      const orderRes = await paymentService.createOrder({
+        productName: `Mango Bliss: ${productInfo.flavorName}`,
+        amount: total,
+        customerName: customer.name,
+        paymentMethod: method,
+      });
 
-      setTimeout(() => {
-        onPaymentSuccess(orderId);
-      }, 2000);
-    }, 2000);
+      if (!orderRes.success) throw new Error("Order creation failed");
+
+      const systemOrderId = orderRes.order.systemOrderId;
+
+      if (method === 'cod') {
+         setTimeout(() => {
+           setStep('success');
+           setTimeout(() => onPaymentSuccess(systemOrderId), 2000);
+         }, 1000);
+         return;
+      }
+
+      // If using backend demo mock, simulate the Razorpay delay and auto-succeed
+      if (orderRes.razorpayOrder.id && orderRes.razorpayOrder.id.includes('mock')) {
+         setTimeout(async () => {
+           try {
+             const verifyRes = await paymentService.verifyPayment({
+               razorpay_payment_id: `pay_mock_${Math.floor(Math.random()*10000)}`,
+               razorpay_order_id: orderRes.razorpayOrder.id,
+               razorpay_signature: "mock_signature",
+               systemOrderId
+             });
+             if (verifyRes.success) {
+               setStep('success');
+               setTimeout(() => onPaymentSuccess(systemOrderId), 2000);
+             } else {
+               alert("Payment verification failed: " + verifyRes.message);
+               setStep('payment');
+             }
+           } catch {
+             setStep('payment');
+           }
+         }, 1500);
+         return;
+      }
+
+      // Real Razorpay Flow
+      const options = {
+        key: 'rzp_test_placeholder', // Dummy key for demo
+        amount: Math.round(total * 100),
+        currency: 'INR',
+        name: 'Mango Bliss',
+        description: 'Complete your purchase',
+        order_id: orderRes.razorpayOrder.id,
+        handler: async function (response: any) {
+          setStep('processing');
+          try {
+            const verifyRes = await paymentService.verifyPayment({
+              ...response,
+              systemOrderId
+            });
+            if (verifyRes.success) {
+              setStep('success');
+              setTimeout(() => onPaymentSuccess(systemOrderId), 2000);
+            } else {
+              alert("Payment verification failed: " + verifyRes.message);
+              setStep('payment');
+            }
+          } catch (e) {
+            alert("Verification error");
+            setStep('payment');
+          }
+        },
+        prefill: {
+          name: customer.name,
+          email: customer.email,
+          contact: customer.phone
+        },
+        theme: {
+          color: '#e11d48'
+        },
+        modal: {
+          ondismiss: function() {
+            setStep('payment');
+          }
+        }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', function (response: any) {
+        alert("Payment failed!");
+        setStep('payment');
+      });
+      rzp.open();
+
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong!");
+      setStep('payment');
+    }
   };
 
   return (
@@ -89,17 +178,16 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
             {/* User Details Form */}
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
               <h4 className="font-black uppercase tracking-widest text-slate-400 text-xs mb-4">Customer Details</h4>
-              <input type="text" placeholder="Full Name" defaultValue="John Doe" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
+              <input type="text" value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} placeholder="Full Name" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
               <div className="flex gap-4">
-                <input type="tel" placeholder="Phone Number" defaultValue="9876543210" className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
-                <input type="email" placeholder="Email Address" defaultValue="john@example.com" className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
+                <input type="tel" value={customer.phone} onChange={e => setCustomer({...customer, phone: e.target.value})} placeholder="Phone Number" className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
+                <input type="email" value={customer.email} onChange={e => setCustomer({...customer, email: e.target.value})} placeholder="Email Address" className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
               </div>
-              <textarea placeholder="Delivery Address" rows={2} defaultValue="123 Bliss Street, Flavor Town" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500"></textarea>
-              <input type="text" placeholder="Landmark (Optional)" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
+              <textarea placeholder="Delivery Address" value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})} rows={2} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500"></textarea>
               <div className="flex gap-4">
-                <input type="text" placeholder="City" defaultValue="Mumbai" className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
-                <input type="text" placeholder="State" defaultValue="MH" className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
-                <input type="text" placeholder="Pincode" defaultValue="400001" className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
+                <input type="text" placeholder="City" value={customer.city} onChange={e => setCustomer({...customer, city: e.target.value})} className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
+                <input type="text" placeholder="State" value={customer.state} onChange={e => setCustomer({...customer, state: e.target.value})} className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
+                <input type="text" placeholder="Pincode" value={customer.pincode} onChange={e => setCustomer({...customer, pincode: e.target.value})} className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
               </div>
             </div>
 
@@ -162,16 +250,11 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
             <div className="space-y-3">
               <h4 className="font-black uppercase tracking-widest text-slate-400 text-xs mb-4 ml-2">Payment Method Option</h4>
               
-              <button onClick={() => handlePayment('gpay')} className="w-full flex items-center gap-4 p-5 bg-white border border-slate-100 hover:border-slate-300 rounded-2xl transition-all group">
+              <button onClick={() => handlePayment('upi')} className="w-full flex items-center gap-4 p-5 bg-white border border-slate-100 hover:border-slate-300 rounded-2xl transition-all group">
                 <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform"><Smartphone size={20} /></div>
-                <div className="text-left"><p className="font-black text-slate-900 text-sm">Google Pay</p><p className="text-xs font-bold text-slate-400">Fast & Secure UPI</p></div>
+                <div className="text-left"><p className="font-black text-slate-900 text-sm">Google Pay / PhonePe / UPI</p><p className="text-xs font-bold text-slate-400">Fast & Secure UPI</p></div>
               </button>
               
-              <button onClick={() => handlePayment('phonepe')} className="w-full flex items-center gap-4 p-5 bg-white border border-slate-100 hover:border-slate-300 rounded-2xl transition-all group">
-                <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform"><Smartphone size={20} /></div>
-                <div className="text-left"><p className="font-black text-slate-900 text-sm">PhonePe</p><p className="text-xs font-bold text-slate-400">Scan & Pay</p></div>
-              </button>
-
               <button onClick={() => handlePayment('card')} className="w-full flex items-center gap-4 p-5 bg-white border border-slate-100 hover:border-slate-300 rounded-2xl transition-all group">
                 <div className="w-10 h-10 rounded-full bg-slate-50 text-slate-600 flex items-center justify-center group-hover:scale-110 transition-transform"><CreditCard size={20} /></div>
                 <div className="text-left"><p className="font-black text-slate-900 text-sm">Credit / Debit Card</p><p className="text-xs font-bold text-slate-400">Visa, Mastercard, RuPay</p></div>

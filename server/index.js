@@ -3,8 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
-import admin from 'firebase-admin';
+import Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
 
 dotenv.config();
 
@@ -12,24 +13,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- Firebase Initialization ---
-// For production, you should use a service account JSON file.
-// For this demo, we'll check if a service account config is available.
-if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-  try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    console.log("Firebase initialized successfully");
-  } catch (err) {
-    console.error("Firebase initialization failed:", err);
-  }
-} else {
-  console.warn("FIREBASE_SERVICE_ACCOUNT not found in environment. Order persistence disabled.");
-}
+// --- Database Initialization ---
+const db = new Database('./mango-bliss.db');
 
-const db = admin.apps.length ? admin.firestore() : null;
+db.exec(`
+  CREATE TABLE IF NOT EXISTS orders (
+    systemOrderId TEXT PRIMARY KEY,
+    gatewayOrderId TEXT,
+    customerName TEXT,
+    productName TEXT,
+    amount REAL,
+    paymentMethod TEXT,
+    paymentStatus TEXT,
+    transactionId TEXT,
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
 
 // --- Razorpay Initialization ---
 const razorpay = new Razorpay({
@@ -37,44 +37,56 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET || 'secret_placeholder',
 });
 
-// --- API Endpoints ---
+// Prepared statements
+const insertOrder = db.prepare(`
+  INSERT INTO orders (systemOrderId, gatewayOrderId, customerName, productName, amount, paymentMethod, paymentStatus)
+  VALUES (@systemOrderId, @gatewayOrderId, @customerName, @productName, @amount, @paymentMethod, @paymentStatus)
+`);
 
-// 1. Create Order
+const verifyOrder = db.prepare(`
+  UPDATE orders 
+  SET paymentStatus = @paymentStatus, transactionId = @transactionId, updatedAt = CURRENT_TIMESTAMP
+  WHERE systemOrderId = @systemOrderId
+`);
+
+const updateOrderStatus = db.prepare(`
+  UPDATE orders 
+  SET paymentStatus = @paymentStatus, updatedAt = CURRENT_TIMESTAMP
+  WHERE systemOrderId = @systemOrderId
+`);
+
+// --- API Endpoints ---
 app.post('/api/orders/create', async (req, res) => {
   try {
     const { productName, amount, customerName, paymentMethod } = req.body;
-    
-    // Create a unique order ID for our system
     const systemOrderId = `ORD-${Date.now()}-${uuidv4().substring(0, 8)}`;
 
     const options = {
-      amount: Math.round(amount * 100), // amount in smallest currency unit (paise)
+      amount: Math.round(amount * 100),
       currency: "INR",
       receipt: systemOrderId,
     };
 
     let razorpayOrder = null;
     if (paymentMethod !== 'cod') {
-      razorpayOrder = await razorpay.orders.create(options);
+      if (!process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID === 'rzp_test_placeholder') {
+        razorpayOrder = { id: `order_mock_${Date.now()}` };
+      } else {
+        razorpayOrder = await razorpay.orders.create(options);
+      }
     }
 
     const orderData = {
-      orderId: systemOrderId,
+      systemOrderId,
       gatewayOrderId: razorpayOrder ? razorpayOrder.id : null,
       customerName,
       productName,
       amount,
       paymentMethod,
-      paymentStatus: 'pending',
-      transactionId: null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      paymentStatus: paymentMethod === 'cod' ? 'success' : 'pending',
     };
 
-    // Store in DB if available
-    if (db) {
-      await db.collection('orders').doc(systemOrderId).set(orderData);
-    }
+    insertOrder.run(orderData);
 
     res.status(200).json({
       success: true,
@@ -87,36 +99,38 @@ app.post('/api/orders/create', async (req, res) => {
   }
 });
 
-// 2. Verify Payment
 app.post('/api/orders/verify', async (req, res) => {
   try {
     const { razorpay_payment_id, razorpay_order_id, razorpay_signature, systemOrderId } = req.body;
 
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || 'secret_placeholder')
-      .update(body.toString())
-      .digest("hex");
-
-    const isMatch = expectedSignature === razorpay_signature;
+    const isDemo = !process.env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET === 'secret_placeholder';
+    
+    let isMatch = false;
+    
+    if (isDemo) {
+      isMatch = true; // Automatically pass verification in demo mode
+    } else {
+      const body = razorpay_order_id + "|" + razorpay_payment_id;
+      const expectedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+        .update(body.toString())
+        .digest("hex");
+      isMatch = expectedSignature === razorpay_signature;
+    }
 
     if (isMatch) {
-      // Update DB
-      if (db && systemOrderId) {
-        await db.collection('orders').doc(systemOrderId).update({
-          paymentStatus: 'success',
-          transactionId: razorpay_payment_id,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
+      verifyOrder.run({
+        paymentStatus: 'success',
+        transactionId: razorpay_payment_id,
+        systemOrderId
+      });
       res.status(200).json({ success: true, message: "Payment verified successfully" });
     } else {
-      if (db && systemOrderId) {
-        await db.collection('orders').doc(systemOrderId).update({
-          paymentStatus: 'failed',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
+      verifyOrder.run({
+        paymentStatus: 'failed',
+        transactionId: null,
+        systemOrderId
+      });
       res.status(400).json({ success: false, message: "Invalid signature" });
     }
   } catch (error) {
@@ -125,43 +139,19 @@ app.post('/api/orders/verify', async (req, res) => {
   }
 });
 
-// 3. Update Order Status (for COD or other manual updates)
-app.post('/api/orders/update-status', async (req, res) => {
+app.post('/api/orders/update-status', (req, res) => {
   try {
     const { orderId, status } = req.body;
-    if (db) {
-      await db.collection('orders').doc(orderId).update({
-        paymentStatus: status,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      res.status(200).json({ success: true });
-    } else {
-      res.status(404).json({ success: false, message: "Database not initialized" });
-    }
+    updateOrderStatus.run({ paymentStatus: status, systemOrderId: orderId });
+    res.status(200).json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// 4. Webhook Callback
-app.post('/api/payment/callback', (req, res) => {
-  // Logic to handle Razorpay webhooks for async payment confirmation
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  const signature = req.headers['x-razorpay-signature'];
-  
-  // Real implementation would verify the signature here...
-  console.log("Webhook received:", req.body);
-  res.status(200).send('OK');
-});
-
-// 5. Admin Stats
-app.get('/api/admin/stats', async (req, res) => {
+app.get('/api/admin/stats', (req, res) => {
   try {
-    if (!db) return res.status(404).json({ message: "DB not available" });
-    
-    const snapshot = await db.collection('orders').get();
-    const orders = snapshot.docs.map(doc => doc.data());
-    
+    const orders = db.prepare('SELECT * FROM orders').all();
     const stats = {
       totalOrders: orders.length,
       paidOrders: orders.filter(o => o.paymentStatus === 'success').length,
@@ -169,7 +159,6 @@ app.get('/api/admin/stats', async (req, res) => {
       failedPayments: orders.filter(o => o.paymentStatus === 'failed').length,
       codOrders: orders.filter(o => o.paymentMethod === 'cod').length,
     };
-    
     res.status(200).json(stats);
   } catch (error) {
     res.status(500).json({ message: error.message });

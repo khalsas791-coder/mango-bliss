@@ -1,0 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-serif: "Playfair Display", serif;
+  
+  --color-mango-50: #fffbeb;
+  --color-mango-100: #fef3c7;
+  --color-mango-200: #fde68a;
+  --color-mango-300: #fcd34d;
+  --color-mango-400: #fbbf24;
+  --color-mango-500: #f59e0b;
+  --color-mango-600: #d97706;
+  --color-mango-700: #b45309;
+  --color-mango-800: #92400e;
+  --color-mango-900: #78350f;
+}
+
+@layer base {
+  body {
+    @apply bg-mango-50 text-mango-900 selection:bg-mango-300;
+  }
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-linear-to-r from-mango-600 to-orange-600;
+}

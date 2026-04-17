@@ -238,13 +238,30 @@ export default function App() {
         </div>
       </div>
 
-      {/* Configurator Toggle */}
-      <button 
-        onClick={() => setIsConfigOpen(true)}
-        className="fixed top-10 right-10 z-50 w-14 h-14 bg-white rounded-full shadow-2xl flex items-center justify-center text-[#e11d48] hover:scale-110 transition-transform"
-      >
-        <Settings2 size={28} />
-      </button>
+      {/* Top-right action buttons: Admin + Configurator */}
+      <div className="fixed top-10 right-10 z-50 flex items-center gap-3">
+        {/* Admin Button */}
+        <button
+          onClick={() => setIsAdminOpen(true)}
+          title="Admin Panel"
+          className="w-12 h-12 bg-slate-900/80 backdrop-blur-md rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 hover:bg-slate-900 transition-transform border border-white/10"
+        >
+          {/* Shield icon inline SVG */}
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </button>
+
+        {/* Configurator Button */}
+        <button
+          onClick={() => setIsConfigOpen(true)}
+          title="Customize"
+          className="w-14 h-14 bg-white rounded-full shadow-2xl flex items-center justify-center text-[#e11d48] hover:scale-110 transition-transform"
+        >
+          <Settings2 size={28} />
+        </button>
+      </div>
+
 
       {/* Configurator Panel */}
       <AnimatePresence>

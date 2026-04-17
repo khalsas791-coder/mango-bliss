@@ -21,6 +21,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// --- Request Logger (Production Diagnostic) ---
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 // --- MongoDB Connection ---
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mango-bliss';
 
@@ -48,6 +54,10 @@ app.get('/api/health', (req, res) => {
     sqlite: db.open ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString()
   });
+});
+
+app.get('/api/test-json', (req, res) => {
+  res.status(200).json({ success: true, message: 'Server is correctly returning JSON' });
 });
 
 // --- Static File Serving (Production) ---

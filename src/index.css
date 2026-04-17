@@ -137,3 +137,18 @@
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
 }
+
+/* ── Mobile Utilities ── */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 12px);
+}
+
+/* Suppress tap highlight on mobile for button-like elements */
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent text size adjustment on orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+}

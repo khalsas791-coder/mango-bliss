@@ -5,6 +5,7 @@ interface User {
   id: string;
   name: string;
   email: string;
+  role: 'user' | 'admin';
   createdAt: string;
 }
 
@@ -38,7 +39,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         localStorage.setItem('mango_bliss_token', token);
         set({ 
           token, 
-          user, 
+          user: { ...user, role: user.role || 'user' }, 
           isAuthenticated: true, 
           isLoading: false,
           error: null 
@@ -65,7 +66,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         localStorage.setItem('mango_bliss_token', token);
         set({ 
           token, 
-          user, 
+          user: { ...user, role: user.role || 'user' }, 
           isAuthenticated: true, 
           isLoading: false,
           error: null 
@@ -106,7 +107,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const res = await authService.getMe(token);
       if (res.success) {
         set({
-          user: res.user,
+          user: { ...res.user, role: res.user.role || 'user' },
           isAuthenticated: true,
           isLoading: false,
         });

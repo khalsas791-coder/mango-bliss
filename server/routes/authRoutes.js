@@ -39,8 +39,8 @@ router.post('/register', async (req, res) => {
     // Create user
     const user = await User.create({ name, email, password });
 
-    // Generate token
-    const token = generateToken(user._id);
+    // Generate token with role embedded
+    const token = generateToken(user._id, user.role || 'user');
 
     res.status(201).json({
       success: true,
@@ -50,6 +50,7 @@ router.post('/register', async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role || 'user',
         createdAt: user.createdAt
       }
     });
@@ -107,18 +108,29 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Check password
-    const isMatch = await user.comparePassword(password);
-    
-    if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password.'
-      });
+    // Check if this is the admin login (uses .env credentials)
+    const adminEmail    = (process.env.ADMIN_EMAIL    || '').toLowerCase();
+    const adminPassword =  process.env.ADMIN_PASSWORD || '';
+    const isAdminLogin  = email.toLowerCase() === adminEmail && password === adminPassword;
+
+    let role = user.role || 'user';
+
+    if (isAdminLogin) {
+      // Elevate role to admin in this session (also persist on the DB record)
+      role = 'admin';
+      if (user.role !== 'admin') {
+        await user.updateOne({ role: 'admin' });
+      }
+    } else {
+      // Verify password for regular users
+      const isMatch = await user.comparePassword(password);
+      if (!isMatch) {
+        return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+      }
     }
 
-    // Generate token
-    const token = generateToken(user._id);
+    // Generate token with role embedded
+    const token = generateToken(user._id, role);
 
     res.status(200).json({
       success: true,
@@ -128,6 +140,7 @@ router.post('/login', async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role,
         createdAt: user.createdAt
       }
     });
@@ -162,6 +175,7 @@ router.get('/me', authMiddleware, async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role || 'user',
         createdAt: user.createdAt
       }
     });

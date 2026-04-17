@@ -405,7 +405,15 @@ app.get('*', (req, res) => {
 });
 
 
+// --- Start Server ---
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => {
-  console.log(`Server & WebSockets running on port ${PORT}`);
-});
+
+// On Vercel, the app is exported and managed by the platform.
+// This block ensures the server only listens locally or in non-serverless environments.
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  httpServer.listen(PORT, () => {
+    console.log(`Server & WebSockets running on port ${PORT}`);
+  });
+}
+
+export default app;

@@ -89,13 +89,63 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'online',
     mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    sqlite: db.open ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString()
   });
 });
 
 app.get('/api/test-json', (req, res) => {
   res.status(200).json({ success: true, message: 'Server is correctly returning JSON' });
+});
+
+// --- Route Directions Proxy (OSRM) ---
+// Fetches real road routes from OSRM demo server and proxies to frontend.
+// This avoids exposing any API key on the client and handles CORS.
+app.get('/api/directions', async (req, res) => {
+  const { startLat, startLng, endLat, endLng } = req.query;
+
+  if (!startLat || !startLng || !endLat || !endLng) {
+    return res.status(400).json({ success: false, message: 'Missing coordinate parameters' });
+  }
+
+  try {
+    // OSRM public demo server — no key required
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&steps=false`;
+    const response = await fetch(osrmUrl, {
+      headers: { 'User-Agent': 'MangoBlissApp/1.0' }
+    });
+
+    if (!response.ok) throw new Error(`OSRM responded with status ${response.status}`);
+
+    const data = await response.json();
+
+    if (!data.routes || data.routes.length === 0) {
+      return res.status(404).json({ success: false, message: 'No route found' });
+    }
+
+    const route = data.routes[0];
+    // Convert GeoJSON [lng, lat] pairs to Leaflet [lat, lng] pairs
+    const geometry = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+
+    res.status(200).json({
+      success: true,
+      distance_m: Math.round(route.distance),
+      duration_s: Math.round(route.duration),
+      geometry
+    });
+  } catch (err) {
+    console.error('OSRM fetch error:', err.message);
+    // Graceful fallback: return a straight line between the two points
+    res.status(200).json({
+      success: true,
+      distance_m: null,
+      duration_s: null,
+      geometry: [
+        [parseFloat(startLat), parseFloat(startLng)],
+        [parseFloat(endLat), parseFloat(endLng)]
+      ],
+      fallback: true
+    });
+  }
 });
 
 // --- Static File Serving (Production) ---

@@ -82,3 +82,47 @@
     animation: gradient-shift 3s ease-in-out infinite;
   }
 }
+
+/* ── Map Marker Animations (used in inline SVG HTML strings for Leaflet divIcons) ── */
+@keyframes pulseRing {
+  0% { transform: scale(0.5); opacity: 0.8; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+@keyframes ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
+}
+
+/* Fix leaflet z-index inside fixed positioned containers */
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-pane,
+.leaflet-overlay-pane,
+.leaflet-shadow-pane,
+.leaflet-marker-pane,
+.leaflet-popup-pane,
+.leaflet-map-pane svg,
+.leaflet-map-pane canvas {
+  position: absolute;
+}
+
+.leaflet-container {
+  z-index: 0;
+}
+
+/* Scrollbar styling for admin user list */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 4px;
+}
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 999px;
+}
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}

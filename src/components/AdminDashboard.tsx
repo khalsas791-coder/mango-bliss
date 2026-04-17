@@ -196,7 +196,8 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
                       <MapPin size={48} className="mx-auto text-slate-200 mb-4" />
                       <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">No active shipments in transit.</p>
                     </div>
-                  ) :                     <div className="space-y-6">
+                  ) : (
+                    <div className="space-y-6">
                       {/* Active Fleet Map */}
                       <div className="h-[400px] w-full rounded-[2.5rem] overflow-hidden border-4 border-slate-50 shadow-inner mb-8 bg-slate-100 relative z-0">
                         <MapContainer 
@@ -274,7 +275,6 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
                         </div>
                       ))}
                     </div>
->
                   )}
 
                 </div>

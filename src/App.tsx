@@ -470,8 +470,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* Footer buttons */}
-            <div className="p-6 sm:p-10 pt-0 border-t border-slate-100">
+            {/* Footer buttons — sticky at the bottom, clears mobile nav bar */}
+            <div className="p-6 sm:p-10 pt-4 pb-28 sm:pb-8 border-t border-slate-100 flex-shrink-0">
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={() => { setIsConfigOpen(false); setIsProductPageOpen(true); }}

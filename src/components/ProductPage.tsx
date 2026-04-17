@@ -476,15 +476,25 @@ export function ProductPage({ onClose, color, setColor, topping, setTopping, fla
                 </p>
               </div>
 
-              {/* Extra bottom space so content isn't hidden behind sticky button */}
-              <div className="h-4 md:h-8" />
+              {/* Desktop ORDER NOW button — shown only on md+ */}
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setShowCheckout(true)}
+                className="hidden md:flex w-full bg-[#e11d48] text-white py-5 rounded-2xl font-black text-lg shadow-[0_8px_25px_rgba(225,29,72,0.35)] items-center justify-center gap-3 mt-2"
+              >
+                <ShoppingBag size={22} />
+                ORDER NOW • ₹{(currentPrice * quantity).toFixed(0)}
+              </motion.button>
+
+              {/* Extra bottom space so mobile sticky button never overlaps content */}
+              <div className="h-24 md:h-8" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* ═══ STICKY BOTTOM ORDER BUTTON ═══ */}
-      <div className="fixed bottom-0 left-0 right-0 md:relative md:bottom-auto z-[305] bg-white/95 md:bg-transparent backdrop-blur-md md:backdrop-blur-none border-t border-slate-100 md:border-0 px-5 sm:px-8 pb-5 pt-3 md:hidden">
+      {/* ═══ STICKY BOTTOM ORDER BUTTON (mobile only) ═══ */}
+      <div className="fixed bottom-0 left-0 right-0 z-[305] bg-white/95 backdrop-blur-md border-t border-slate-100 px-5 sm:px-8 pb-6 pt-3 md:hidden">
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={() => setShowCheckout(true)}
@@ -495,13 +505,6 @@ export function ProductPage({ onClose, color, setColor, topping, setTopping, fla
         </motion.button>
       </div>
 
-      {/* Desktop order button inside scroll area */}
-      <style>{`
-        @media (min-width: 768px) {
-          .desktop-order-btn { display: block; }
-        }
-        @keyframes premiumFloat { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-14px); } }
-      `}</style>
     </motion.div>
   );
 }

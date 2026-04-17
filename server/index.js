@@ -27,34 +27,59 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- MongoDB Connection ---
-let MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mango-bliss';
+// --- MongoDB Connection Singleton (for Serverless) ---
+let isConnected = false;
 
-// Sanitization: Remove potential "MONGODB_URI=" prefix if user pasted it by mistake
-if (MONGODB_URI.startsWith('MONGODB_URI=')) {
-  console.log('🔧 [Diagnostic] Cleaning malformed MONGODB_URI prefix');
-  MONGODB_URI = MONGODB_URI.replace('MONGODB_URI=', '');
+async function connectDB() {
+  if (isConnected && mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  let uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/mango-bliss';
+
+  // Aggressive Sanitization: Find the start of the actual protocol
+  const mongoMatch = uri.match(/mongodb(?:\+srv)?:\/\/.*/);
+  if (mongoMatch) {
+    uri = mongoMatch[0];
+  }
+
+  // Remove any trailing artifacts or common paste errors (e.g., quotes or colons)
+  uri = uri.trim().replace(/["';]+$/, '');
+
+  try {
+    console.log(`📡 [MongoDB] Attempting connection... (URI starts with: ${uri.substring(0, 20)}...)`);
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 5000,
+    });
+    isConnected = true;
+    console.log('✅ [MongoDB] Connected successfully');
+    return mongoose.connection;
+  } catch (err) {
+    console.error('❌ [MongoDB] Connection ERROR:', err.message);
+    throw err;
+  }
 }
 
-mongoose.connect(MONGODB_URI)
-  .then(() => console.log('✅ MongoDB connected successfully'))
-  .catch((err) => {
-    console.error('❌ MongoDB Connection ERROR:', err.message);
-    if (err.message.includes('Invalid scheme')) {
-      console.error('💡 TIP: Your MONGODB_URI might be malformed. Ensure you didn\'t include the "MONGODB_URI=" prefix in Vercel settings.');
-    }
-  });
+// Initial connection attempt
+connectDB().catch(() => {});
 
 // --- Auth Routes ---
 // Health middleware to check MongoDB connection before processing auth requests
-app.use('/api/auth', (req, res, next) => {
-  if (mongoose.connection.readyState !== 1) {
+app.use('/api/auth', async (req, res, next) => {
+  try {
+    // Wait for database connection if it's still connecting
+    if (mongoose.connection.readyState !== 1) {
+      console.log('⏳ [Middleware] Database not ready, waiting for connection...');
+      await connectDB();
+    }
+    next();
+  } catch (err) {
     return res.status(503).json({
       success: false,
-      message: 'Database connection not established. Please verify MONGODB_URI in environment variables.'
+      message: 'Database connection not established. Please verify MONGODB_URI and Atlas IP Whitelist.',
+      error: err.message
     });
   }
-  next();
 }, authRoutes);
 
 // --- Health Check Endpoint ---

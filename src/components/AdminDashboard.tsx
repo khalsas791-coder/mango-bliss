@@ -772,6 +772,24 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
 
+                {/* Summary mini-cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                  {[
+                    { label: 'Total Users',      value: registeredUsers.length, color: '#3b82f6', bg: 'rgba(59,130,246,0.1)',   icon: Users       },
+                    { label: 'Logged In',         value: registeredUsers.filter((u: any) => u.lastLoginAt).length,  color: '#10b981', bg: 'rgba(16,185,129,0.1)',  icon: CheckCircle2 },
+                    { label: 'Location Shared',   value: registeredUsers.filter((u: any) => u.lastKnownLat).length, color: '#e11d48', bg: 'rgba(225,29,72,0.1)',   icon: MapPin      },
+                    { label: 'Total Logins',      value: registeredUsers.reduce((s: number, u: any) => s + (u.loginCount || 0), 0), color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', icon: Activity },
+                  ].map(({ label, value, color, bg, icon: Icon }) => (
+                    <div key={label} className="rounded-2xl p-4 border border-white/[0.07]" style={{ background: bg }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon size={14} style={{ color }} />
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
+                      </div>
+                      <p className="text-2xl font-black text-white">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="rounded-3xl overflow-hidden border border-white/[0.07]"
                   style={{ background: 'rgba(255,255,255,0.03)' }}>
                   {filteredUsers.length === 0 ? (
@@ -786,14 +804,16 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
                       <table className="w-full">
                         <thead>
                           <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            {['#', 'Name', 'Email', 'User ID', 'Registered', 'Orders'].map(h => (
-                              <th key={h} className="text-left px-5 py-4 text-[10px] font-black text-slate-600 uppercase tracking-widest">{h}</th>
+                            {['#', 'User', 'Email', 'Last Login', 'Logins', 'Location Access', 'Orders'].map(h => (
+                              <th key={h} className="text-left px-5 py-4 text-[10px] font-black text-slate-600 uppercase tracking-widest whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {filteredUsers.map((user: any, idx: number) => {
                             const userOrders = allOrders.filter((o: any) => o.userId?.toString() === user._id?.toString());
+                            const hasLocation = !!(user.lastKnownLat && user.lastKnownLng);
+                            const hasLoggedIn = !!user.lastLoginAt;
                             return (
                               <tr
                                 key={user._id}
@@ -810,45 +830,72 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
                                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-500 to-rose-700 flex items-center justify-center text-white font-black text-sm flex-shrink-0">
                                       {user.name?.charAt(0)?.toUpperCase()}
                                     </div>
-                                    <span className="font-bold text-white text-sm">{user.name}</span>
+                                    <div>
+                                      <span className="font-bold text-white text-sm block">{user.name}</span>
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <code className="text-[9px] font-mono text-slate-600 truncate max-w-[80px]">{user._id}</code>
+                                        <button onClick={() => copyToClipboard(user._id, user._id)} className="opacity-0 group-hover:opacity-100 transition-opacity" title="Copy ID">
+                                          {copiedId === user._id ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} className="text-slate-600 hover:text-slate-400" />}
+                                        </button>
+                                      </div>
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="px-5 py-4">
                                   <div className="flex items-center gap-2">
-                                    <Mail size={13} className="text-slate-600 flex-shrink-0" />
-                                    <span className="text-sm font-bold text-slate-400">{user.email}</span>
+                                    <Mail size={12} className="text-slate-600 flex-shrink-0" />
+                                    <span className="text-xs font-bold text-slate-400">{user.email}</span>
                                   </div>
+                                </td>
+                                <td className="px-5 py-4">
+                                  {hasLoggedIn ? (
+                                    <div className="flex flex-col gap-0.5">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+                                        <span className="text-xs font-black text-emerald-400 whitespace-nowrap">{timeAgo(user.lastLoginAt)}</span>
+                                      </div>
+                                      <span className="text-[10px] font-bold text-slate-600 ml-3">{formatDate(user.lastLoginAt)}</span>
+                                      {user.lastLoginIP && <span className="text-[9px] font-mono text-slate-700 ml-3">IP: {user.lastLoginIP}</span>}
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs font-bold text-slate-700">Never logged in</span>
+                                  )}
                                 </td>
                                 <td className="px-5 py-4">
                                   <div className="flex items-center gap-2">
-                                    <code className="text-[10px] font-mono text-slate-500 bg-white/5 px-2 py-1 rounded-lg truncate max-w-[110px]">
-                                      {user._id}
-                                    </code>
-                                    <button
-                                      onClick={() => copyToClipboard(user._id, user._id)}
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                      title="Copy ID"
-                                    >
-                                      {copiedId === user._id
-                                        ? <Check size={13} className="text-emerald-400" />
-                                        : <Copy size={13} className="text-slate-500 hover:text-slate-300" />
-                                      }
-                                    </button>
+                                    <div className="w-7 h-7 rounded-xl flex items-center justify-center"
+                                      style={(user.loginCount || 0) > 0 ? { background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.25)' } : { background: 'rgba(255,255,255,0.05)' }}>
+                                      <Activity size={12} style={{ color: (user.loginCount || 0) > 0 ? '#8b5cf6' : '#334155' }} />
+                                    </div>
+                                    <span className="text-sm font-black" style={{ color: (user.loginCount || 0) > 0 ? '#c4b5fd' : '#334155' }}>{user.loginCount || 0}</span>
                                   </div>
                                 </td>
                                 <td className="px-5 py-4">
-                                  <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-slate-400">{formatDate(user.createdAt)}</span>
-                                    <span className="text-[10px] font-bold text-slate-600">{timeAgo(user.createdAt)}</span>
-                                  </div>
+                                  {hasLocation ? (
+                                    <div className="flex flex-col gap-0.5">
+                                      <div className="flex items-center gap-2">
+                                        <span className="flex items-center gap-1 text-[10px] font-black text-rose-400"
+                                          style={{ background: 'rgba(225,29,72,0.1)', border: '1px solid rgba(225,29,72,0.2)', padding: '2px 8px', borderRadius: '999px', whiteSpace: 'nowrap' }}>
+                                          <MapPin size={9} /> Shared
+                                        </span>
+                                        <button
+                                          onClick={() => { setFocusPos([user.lastKnownLat, user.lastKnownLng]); setActiveTab('locations'); }}
+                                          className="text-[9px] font-black text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-widest"
+                                          title="View on map"
+                                        >Map →</button>
+                                      </div>
+                                      <span className="text-[9px] font-mono text-slate-600">{Number(user.lastKnownLat).toFixed(4)}, {Number(user.lastKnownLng).toFixed(4)}</span>
+                                      {user.lastLocationAt && <span className="text-[9px] font-bold text-slate-700">{timeAgo(user.lastLocationAt)}</span>}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] font-black text-slate-700 flex items-center gap-1"><X size={10} /> Not shared</span>
+                                  )}
                                 </td>
                                 <td className="px-5 py-4">
                                   <span className="text-xs font-black px-3 py-1.5 rounded-full"
-                                    style={
-                                      userOrders.length > 0
-                                        ? { background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }
-                                        : { background: 'rgba(255,255,255,0.05)', color: '#475569' }
-                                    }>
+                                    style={userOrders.length > 0
+                                      ? { background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }
+                                      : { background: 'rgba(255,255,255,0.05)', color: '#475569' }}>
                                     {userOrders.length} order{userOrders.length !== 1 ? 's' : ''}
                                   </span>
                                 </td>
@@ -866,7 +913,7 @@ export function AdminDashboard({ onClose }: { onClose: () => void }) {
                   style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}>
                   <Lock size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
                   <p className="text-xs font-bold text-amber-600/80">
-                    Passwords are stored as bcrypt hashes and are never displayed here. Only public profile data is shown.
+                    Passwords are never shown. Login activity (last login, count, IP) is recorded on every sign-in. Location coordinates are stamped when a user enables Live Tracking during an order.
                   </p>
                 </div>
               </motion.div>

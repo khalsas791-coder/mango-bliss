@@ -31,6 +31,32 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['user', 'admin'],
     default: 'user'
+  },
+  // ── Activity tracking ──
+  lastLoginAt: {
+    type: Date,
+    default: null
+  },
+  lastLoginIP: {
+    type: String,
+    default: null
+  },
+  loginCount: {
+    type: Number,
+    default: 0
+  },
+  // ── Location tracking ──
+  lastKnownLat: {
+    type: Number,
+    default: null
+  },
+  lastKnownLng: {
+    type: Number,
+    default: null
+  },
+  lastLocationAt: {
+    type: Date,
+    default: null
   }
 });
 

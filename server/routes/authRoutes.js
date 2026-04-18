@@ -132,6 +132,17 @@ router.post('/login', async (req, res) => {
     // Generate token with role embedded
     const token = generateToken(user._id, role);
 
+    // ── Stamp login activity ──
+    const clientIP =
+      req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      'unknown';
+    await User.findByIdAndUpdate(user._id, {
+      lastLoginAt: new Date(),
+      lastLoginIP: clientIP,
+      $inc: { loginCount: 1 }
+    });
+
     res.status(200).json({
       success: true,
       message: 'Login successful!',

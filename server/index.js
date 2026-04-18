@@ -536,6 +536,22 @@ app.post('/api/location/update', async (req, res) => {
       { userLat: latitude, userLng: longitude }
     );
 
+    // ── Stamp last known location on the User document ──
+    if (userId && userId !== 'guest') {
+      try {
+        const User = (await import('./models/User.js')).default;
+        if (mongoose.Types.ObjectId.isValid(userId)) {
+          await User.findByIdAndUpdate(userId, {
+            lastKnownLat: latitude,
+            lastKnownLng: longitude,
+            lastLocationAt: new Date()
+          });
+        }
+      } catch (locUserErr) {
+        console.warn('[Location] Could not update user location stamp:', locUserErr.message);
+      }
+    }
+
     // Broadcast to the specifically interested order room
     io.to(orderId).emit('userLocationUpdate', { latitude, longitude });
     

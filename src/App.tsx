@@ -30,6 +30,7 @@ export default function App() {
   const [isProductPageOpen, setIsProductPageOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [desktopMode, setDesktopMode] = useState(false);
   const [shakeColor, setShakeColor] = useState('#fbbf24');
   const [toppingType, setToppingType] = useState<'mango' | 'pistachio' | 'chocolate'>('mango');
   const [globalCoupon, setGlobalCoupon] = useState(false);
@@ -40,11 +41,28 @@ export default function App() {
   // Auto-open admin panel for admin users on first load
   useEffect(() => {
     if (isAdmin && !isAdminOpen) {
-      // Small delay so the main app renders first
       const t = setTimeout(() => setIsAdminOpen(true), 600);
       return () => clearTimeout(t);
     }
   }, [isAdmin]);
+
+  // Desktop site toggle — scales the viewport
+  useEffect(() => {
+    const root = document.documentElement;
+    if (desktopMode) {
+      root.classList.add('desktop-mode-active');
+      const scale = window.innerWidth / 1280;
+      document.body.style.transform = `scale(${scale})`;
+      document.body.style.transformOrigin = 'top left';
+      document.body.style.width = '1280px';
+    } else {
+      root.classList.remove('desktop-mode-active');
+      document.body.style.transform = '';
+      document.body.style.transformOrigin = '';
+      document.body.style.width = '';
+    }
+  }, [desktopMode]);
+
 
   const flavors = [
     { name: 'Classic Mango', color: '#fbbf24', id: 'mango', icon: '🥭' },
@@ -71,10 +89,10 @@ export default function App() {
               <div className="w-screen">
 
                 {/* ── SECTION 1: HERO ── */}
-                <section className="h-screen flex flex-col items-center justify-center px-5 sm:px-10 relative">
+                <section className="h-screen flex flex-col items-center justify-center px-4 sm:px-10 relative">
                   {/* Brand logo */}
-                  <div className="absolute top-5 left-5 sm:top-10 sm:left-10 flex items-center gap-2 text-white z-10">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
+                  <div className="absolute top-4 left-4 sm:top-10 sm:left-10 flex items-center gap-2 text-white z-10">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 bg-white rounded-full flex items-center justify-center shadow-lg flex-shrink-0">
                       <span className="text-[#e11d48] font-bold text-base sm:text-xl">M</span>
                     </div>
                     <span className="font-display font-bold text-base sm:text-xl tracking-tight">MANGO BLISS</span>
@@ -86,7 +104,7 @@ export default function App() {
                       whileInView={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.7 }}
                     >
-                      <h1 className="font-display text-[15vw] sm:text-[12vw] font-black leading-[0.85] text-white tracking-tighter uppercase">
+                      <h1 className="font-display text-hero font-black text-white uppercase">
                         THE <br />ULTIMATE <br />REFRESH.
                       </h1>
                       <p className="text-white/80 mt-4 sm:mt-6 max-w-xs sm:max-w-md text-sm sm:text-lg font-medium leading-relaxed">
@@ -96,7 +114,7 @@ export default function App() {
                       <motion.button
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setIsProductPageOpen(true)}
-                        className="mt-6 sm:hidden flex items-center gap-3 bg-white text-[#e11d48] px-7 py-4 rounded-full font-black text-base shadow-2xl active:scale-95"
+                        className="mt-6 sm:hidden flex items-center gap-3 bg-white text-[#e11d48] px-7 py-4 rounded-full font-black text-base shadow-2xl active:scale-95 min-h-[52px]"
                       >
                         <ShoppingBag size={20} /> ORDER NOW
                       </motion.button>
@@ -286,41 +304,47 @@ export default function App() {
           MOBILE BOTTOM ACTION BAR
          ══════════════════════════════════════════ */}
       <div className="fixed bottom-0 left-0 right-0 z-[90] sm:hidden">
-        <div className="bg-white/10 backdrop-blur-2xl border-t border-white/15 flex items-center justify-around px-2 py-2 safe-area-pb">
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={() => setIsProductPageOpen(true)}
-            className="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl active:bg-white/10 transition-colors"
-          >
-            <ShoppingBag size={22} className="text-white" />
-            <span className="text-[9px] font-black text-white/70 uppercase tracking-widest">Shop</span>
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={() => setIsGameOpen(true)}
-            className="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl active:bg-white/10 transition-colors"
-          >
-            <Trophy size={22} className="text-white" />
-            <span className="text-[9px] font-black text-white/70 uppercase tracking-widest">Play</span>
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={() => setIsConfigOpen(true)}
-            className="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl active:bg-white/10 transition-colors"
-          >
-            <Settings2 size={22} className="text-white" />
-            <span className="text-[9px] font-black text-white/70 uppercase tracking-widest">Customize</span>
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.88 }}
-            onClick={() => setIsMobileMenuOpen(true)}
-            className="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl active:bg-white/10 transition-colors"
-          >
-            <UserIcon size={22} className="text-white" />
-            <span className="text-[9px] font-black text-white/70 uppercase tracking-widest">You</span>
-          </motion.button>
+        <div className="bg-black/60 backdrop-blur-2xl border-t border-white/10 flex items-center justify-around px-1 pt-2 pb-2 safe-area-pb">
+          {[
+            { icon: Home, label: 'Home', action: () => {}, active: !isProductPageOpen && !isGameOpen && !isConfigOpen && !isMobileMenuOpen },
+            { icon: ShoppingBag, label: 'Shop', action: () => setIsProductPageOpen(true), active: isProductPageOpen },
+            { icon: Trophy, label: 'Play', action: () => setIsGameOpen(true), active: isGameOpen },
+            { icon: Settings2, label: 'Custom', action: () => setIsConfigOpen(true), active: isConfigOpen },
+            { icon: UserIcon, label: 'You', action: () => setIsMobileMenuOpen(true), active: isMobileMenuOpen },
+          ].map(({ icon: Icon, label, action, active }) => (
+            <motion.button
+              key={label}
+              whileTap={{ scale: 0.82 }}
+              onClick={action}
+              className="relative flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-colors"
+            >
+              {active && (
+                <motion.div
+                  layoutId="mobile-nav-pill"
+                  className="absolute inset-0 rounded-2xl bg-white/10"
+                  transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                /
+                >)}
+              <Icon size={active ? 22 : 20} className={active ? 'text-white' : 'text-white/50'} />
+              <span className={`text-[9px] font-black uppercase tracking-widest transition-colors ${active ? 'text-white' : 'text-white/50'}`}>
+                {label}
+              </span>
+              {active && <span className="absolute -top-px left-1/2 -translate-x-1/2 w-4 h-0.5 bg-rose-400 rounded-full" />}
+            </motion.button>
+          ))}
         </div>
       </div>
+
+      {/* ── Desktop Site Toggle (mobile only) ── */}
+      <motion.button
+        id="desktop-site-toggle"
+        whileTap={{ scale: 0.93 }}
+        onClick={() => setDesktopMode(d => !d)}
+        className="fixed z-[9999] right-4 bottom-[5.5rem] sm:hidden flex items-center gap-2 px-4 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest text-white shadow-2xl"
+        style={{ background: 'rgba(15,15,20,0.85)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
+      >
+        <span>{desktopMode ? '📱 Mobile View' : '🖥 Desktop Site'}</span>
+      </motion.button>
 
       {/* ══════════════════════════════════════════
           MOBILE USER MENU DRAWER

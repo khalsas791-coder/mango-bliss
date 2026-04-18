@@ -871,7 +871,7 @@ function ParallaxCard({ children, isSignup }: { children: React.ReactNode; isSig
         {/* Inner shimmer */}
         <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
 
-        <div className="relative z-10 p-8 md:p-10">
+        <div className="relative z-10 p-6 sm:p-8 md:p-10">
           {children}
         </div>
       </motion.div>
@@ -964,7 +964,7 @@ export default function AuthPage() {
       </motion.div>
 
       {/* Central card */}
-      <div className="relative z-10 flex items-center justify-center h-full px-4 py-20">
+      <div className="relative z-10 flex items-center justify-center min-h-full px-4 py-6 sm:py-20 overflow-y-auto mobile-scroll">
         <ParallaxCard isSignup={isSignup}>
           {/* Success overlay */}
           <AnimatePresence>

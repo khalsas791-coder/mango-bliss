@@ -272,16 +272,16 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
               <h4 className="font-black uppercase tracking-widest text-slate-400 text-xs mb-4">Customer Details</h4>
-              <input type="text" value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} placeholder="Full Name" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
-              <div className="flex gap-4">
-                <input type="tel" value={customer.phone} onChange={e => setCustomer({...customer, phone: e.target.value})} placeholder="Phone Number" className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
-                <input type="email" value={customer.email} onChange={e => setCustomer({...customer, email: e.target.value})} placeholder="Email Address" className="w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
+              <input type="text" value={customer.name} onChange={e => setCustomer({...customer, name: e.target.value})} placeholder="Full Name" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500 text-base" />
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input type="tel" value={customer.phone} onChange={e => setCustomer({...customer, phone: e.target.value})} placeholder="Phone Number" className="w-full sm:w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500 text-base" />
+                <input type="email" value={customer.email} onChange={e => setCustomer({...customer, email: e.target.value})} placeholder="Email Address" className="w-full sm:w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500 text-base" />
               </div>
-              <textarea placeholder="Delivery Address" value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})} rows={2} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
-              <div className="flex gap-4">
-                <input type="text" placeholder="City" value={customer.city} onChange={e => setCustomer({...customer, city: e.target.value})} className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
-                <input type="text" placeholder="State" value={customer.state} onChange={e => setCustomer({...customer, state: e.target.value})} className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
-                <input type="text" placeholder="Pincode" value={customer.pincode} onChange={e => setCustomer({...customer, pincode: e.target.value})} className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500" />
+              <textarea placeholder="Delivery Address" value={customer.address} onChange={e => setCustomer({...customer, address: e.target.value})} rows={2} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-900 outline-none focus:border-rose-500 text-base" />
+              <div className="flex gap-2">
+                <input type="text" placeholder="City" value={customer.city} onChange={e => setCustomer({...customer, city: e.target.value})} className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 font-bold text-slate-900 outline-none focus:border-rose-500 text-base" />
+                <input type="text" placeholder="State" value={customer.state} onChange={e => setCustomer({...customer, state: e.target.value})} className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 font-bold text-slate-900 outline-none focus:border-rose-500 text-base" />
+                <input type="text" placeholder="Pincode" value={customer.pincode} onChange={e => setCustomer({...customer, pincode: e.target.value})} className="w-1/3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 font-bold text-slate-900 outline-none focus:border-rose-500 text-base" />
               </div>
             </div>
             <button

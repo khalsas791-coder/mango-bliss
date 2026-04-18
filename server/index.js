@@ -518,32 +518,112 @@ app.get('/api/orders/:id', async (req, res) => {
    }
 });
 
-// --- User Location Endpoints ---
+// ═══════════════════════════════════════════════════════════════════
+// PROFESSIONAL LOCATION API
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Derive a quality label from the accuracy radius (metres).
+ */
+function qualityFromAccuracy(accuracy) {
+  if (accuracy == null) return 'unknown';
+  if (accuracy <= 10)   return 'excellent';
+  if (accuracy <= 30)   return 'good';
+  if (accuracy <= 100)  return 'fair';
+  return 'poor';
+}
+
+// Simple in-memory per-order rate-limiter (1 write per 5 s)
+const locationRateMap = new Map(); // orderId → lastWriteMs
+const LOCATION_MIN_INTERVAL_MS = 5_000;
+
+// --- POST /api/location/update ---
+// Accepts full precision geolocation payload from the client.
 app.post('/api/location/update', async (req, res) => {
   try {
-    const { userId, userName, orderId, latitude, longitude } = req.body;
-    
-    // Update or create location record
+    const {
+      userId, userName, orderId,
+      latitude, longitude,
+      accuracy, altitude, altitudeAccuracy, heading, speed,
+      address, source, quality: clientQuality,
+      deviceInfo
+    } = req.body;
+
+    // Basic validation
+    if (latitude == null || longitude == null || !orderId) {
+      return res.status(400).json({ success: false, message: 'latitude, longitude and orderId are required.' });
+    }
+    const lat = parseFloat(latitude);
+    const lng = parseFloat(longitude);
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ success: false, message: 'Coordinates out of valid range.' });
+    }
+
+    // Server-side rate-limit (5 s per orderId)
+    const now = Date.now();
+    const lastWrite = locationRateMap.get(orderId) || 0;
+    const isRateLimited = (now - lastWrite) < LOCATION_MIN_INTERVAL_MS;
+    if (isRateLimited) {
+      return res.status(429).json({
+        success: false,
+        message: 'Location updates are rate-limited to once per 5 seconds.',
+        retryAfterMs: LOCATION_MIN_INTERVAL_MS - (now - lastWrite)
+      });
+    }
+    locationRateMap.set(orderId, now);
+
+    // Derive server-side quality if client didn't send one
+    const quality = clientQuality || qualityFromAccuracy(accuracy != null ? parseFloat(accuracy) : null);
+
+    // Extract client IP
+    const ipAddress = (
+      req.headers['x-forwarded-for']?.split(',')[0] ||
+      req.socket?.remoteAddress ||
+      null
+    );
+
+    // Build update payload
+    const updatePayload = {
+      userId,
+      userName: userName || 'Guest',
+      latitude: lat,
+      longitude: lng,
+      accuracy:         accuracy         != null ? parseFloat(accuracy)         : null,
+      altitude:         altitude         != null ? parseFloat(altitude)         : null,
+      altitudeAccuracy: altitudeAccuracy != null ? parseFloat(altitudeAccuracy) : null,
+      heading:          heading          != null ? parseFloat(heading)          : null,
+      speed:            speed            != null ? parseFloat(speed)            : null,
+      quality,
+      source:     source     || 'gps',
+      address:    address    || {},
+      deviceInfo: deviceInfo || {},
+      ipAddress,
+      timestamp:  new Date(),
+      geoPoint: { type: 'Point', coordinates: [lng, lat] },
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    };
+
+    // Upsert: keep one live record per orderId
     const location = await Location.findOneAndUpdate(
       { orderId },
-      { userId, userName, latitude, longitude, timestamp: Date.now() },
-      { upsert: true, new: true }
+      updatePayload,
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    // Also update the order's user coordinates for routing
+    // Also update the order's user coordinates for the delivery-simulation engine
     await Order.findOneAndUpdate(
       { systemOrderId: orderId },
-      { userLat: latitude, userLng: longitude }
+      { userLat: lat, userLng: lng }
     );
 
-    // ── Stamp last known location on the User document ──
+    // Stamp the User document with the last known location
     if (userId && userId !== 'guest') {
       try {
         const User = (await import('./models/User.js')).default;
         if (mongoose.Types.ObjectId.isValid(userId)) {
           await User.findByIdAndUpdate(userId, {
-            lastKnownLat: latitude,
-            lastKnownLng: longitude,
+            lastKnownLat: lat,
+            lastKnownLng: lng,
             lastLocationAt: new Date()
           });
         }
@@ -552,34 +632,99 @@ app.post('/api/location/update', async (req, res) => {
       }
     }
 
-    // Broadcast to the specifically interested order room
-    io.to(orderId).emit('userLocationUpdate', { latitude, longitude });
-    
-    // Broadcast globally for the admin fleet map
-    io.emit('fleetUpdate', { orderId, userId, latitude, longitude });
+    // Real-time broadcast
+    const broadcastPayload = {
+      latitude: lat,
+      longitude: lng,
+      accuracy,
+      quality,
+      address: address?.city ? `${address.city}, ${address.state || ''}`.trim() : null,
+      timestamp: updatePayload.timestamp
+    };
+    io.to(orderId).emit('userLocationUpdate', broadcastPayload);
+    io.emit('fleetUpdate', { orderId, userId, ...broadcastPayload });
 
+    console.log(`📍 [Location] ${orderId} → ${lat.toFixed(5)}, ${lng.toFixed(5)} (${quality} | ±${accuracy ?? '?'}m)`);
     res.status(200).json({ success: true, location });
   } catch (error) {
+    console.error('[Location] Update error:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
+// --- GET /api/location/all --- (Admin: most recent ping per order)
 app.get('/api/location/all', async (req, res) => {
   try {
-    const locations = await Location.find().sort({ timestamp: -1 });
-    res.status(200).json({ success: true, locations });
+    const locations = await Location.find()
+      .sort({ timestamp: -1 })
+      .limit(200)
+      .select('-geoPoint -__v');
+    res.status(200).json({ success: true, count: locations.length, locations });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-app.get('/api/location/:userId', async (req, res) => {
+// --- GET /api/location/history/:orderId --- (Full ping history for an order)
+app.get('/api/location/history/:orderId', async (req, res) => {
   try {
-    const location = await Location.findOne({ userId: req.params.userId }).sort({ timestamp: -1 });
-    if (location) res.status(200).json({ success: true, location });
-    else res.status(404).json({ success: false, message: "Location not found" });
+    const { orderId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const pings = await Location.find({ orderId })
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .select('latitude longitude accuracy quality timestamp speed heading');
+    res.status(200).json({ success: true, count: pings.length, pings });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// --- GET /api/location/:userId --- (Latest location for a user)
+app.get('/api/location/:userId', async (req, res) => {
+  try {
+    const location = await Location
+      .findOne({ userId: req.params.userId })
+      .sort({ timestamp: -1 })
+      .select('-geoPoint -__v');
+    if (location) res.status(200).json({ success: true, location });
+    else res.status(404).json({ success: false, message: 'Location not found' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// --- GET /api/location/reverse-geocode?lat=&lng= ---
+// Proxies Nominatim so the API key / usage policy stays server-side.
+app.get('/api/location/reverse-geocode', async (req, res) => {
+  const { lat, lng } = req.query;
+  if (!lat || !lng) {
+    return res.status(400).json({ success: false, message: 'lat and lng query params are required.' });
+  }
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&addressdetails=1`;
+    const response = await fetch(url, {
+      headers: {
+        'Accept-Language': 'en',
+        'User-Agent': 'MangoBlissApp/1.0 (contact: admin@mangobliss.in)'
+      }
+    });
+    if (!response.ok) throw new Error(`Nominatim responded with ${response.status}`);
+    const data = await response.json();
+    const a = data.address || {};
+    res.status(200).json({
+      success: true,
+      raw:        data.display_name || '',
+      street:     a.road || a.pedestrian || a.footway || null,
+      district:   a.suburb || a.neighbourhood || a.quarter || null,
+      city:       a.city || a.town || a.village || null,
+      state:      a.state || null,
+      country:    a.country || null,
+      postalCode: a.postcode || null
+    });
+  } catch (err) {
+    console.error('[ReverseGeocode] Error:', err.message);
+    res.status(200).json({ success: false, message: 'Reverse geocoding unavailable', raw: '' });
   }
 });
 

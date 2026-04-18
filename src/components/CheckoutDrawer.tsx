@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { X, CreditCard, Truck, Smartphone, Loader2, CheckCircle2, AlertCircle, RefreshCw, WifiOff } from 'lucide-react';
+import { motion } from 'motion/react';
+import { X, CreditCard, Truck, Smartphone, Loader2, CheckCircle2, AlertCircle, RefreshCw, WifiOff, MapPin, Navigation2, Signal } from 'lucide-react';
 import { paymentService } from '../services/paymentService';
 import { useAuthStore } from '../store/authStore';
+import {
+  getCurrentFix,
+  reverseGeocode,
+  postLocationUpdate,
+  QUALITY_CONFIG,
+  type GeoFix,
+  type ReverseGeoAddress
+} from '../services/locationService';
 
 interface CheckoutDrawerProps {
   onClose: () => void;
@@ -20,6 +28,11 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
   const [step, setStep] = useState<'details' | 'payment' | 'processing' | 'success' | 'error'>('details');
   const [errorMsg, setErrorMsg] = useState('');
   const [isNetworkError, setIsNetworkError] = useState(false);
+
+  // Location state
+  const [geoFix, setGeoFix] = useState<GeoFix | null>(null);
+  const [geoAddress, setGeoAddress] = useState<ReverseGeoAddress | null>(null);
+  const [geoStatus, setGeoStatus] = useState<'idle' | 'acquiring' | 'geocoding' | 'ready' | 'fallback'>('idle');
   const [customer, setCustomer] = useState({
     name: 'John Doe',
     phone: '9876543210',
@@ -49,24 +62,50 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
   const gst = 2.00;
   const total = subtotal - discount + delivery + gst;
 
+  // ── Acquire location eagerly when user is on the Payment step ──
+  useEffect(() => {
+    if (step !== 'payment') return;
+    let cancelled = false;
+
+    (async () => {
+      setGeoStatus('acquiring');
+      const fix = await getCurrentFix();
+      if (cancelled) return;
+
+      if (!fix) {
+        setGeoStatus('fallback');
+        return;
+      }
+      setGeoFix(fix);
+      setGeoStatus('geocoding');
+
+      const addr = await reverseGeocode(fix.latitude, fix.longitude);
+      if (!cancelled) {
+        setGeoAddress(addr);
+        setGeoStatus('ready');
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [step]);
+
   const handlePayment = async (method: string) => {
     setStep('processing');
     setErrorMsg('');
     setIsNetworkError(false);
 
-    // Attempt to get GPS coordinates
-    let userLat = 17.9254;
-    let userLng = 77.5187; // fallback GNDECB
+    // Use pre-acquired fix or fallback to GNDECB campus
+    const FALLBACK_LAT = 17.9254;
+    const FALLBACK_LNG = 77.5187;
 
-    try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000, maximumAge: 10000 });
-      });
-      userLat = position.coords.latitude;
-      userLng = position.coords.longitude;
-    } catch {
-      console.warn('GPS unavailable, using GNDECB as fallback');
+    let fix = geoFix;
+    if (!fix) {
+      // One final attempt if not yet acquired
+      fix = await getCurrentFix();
     }
+
+    const userLat = fix?.latitude  ?? FALLBACK_LAT;
+    const userLng = fix?.longitude ?? FALLBACK_LNG;
 
     try {
       // Create the order
@@ -96,6 +135,17 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
       }
 
       const systemOrderId = orderRes.order.systemOrderId;
+
+      // Post the professional location update to the server (fire-and-forget)
+      if (fix) {
+        postLocationUpdate({
+          userId:   user?.id  || 'guest',
+          userName: user?.name || customer.name || 'Guest',
+          orderId:  systemOrderId,
+          fix,
+          address: geoAddress
+        }).catch(() => {});
+      }
 
       // COD / UPI — instant success (no payment gateway)
       if (method === 'cod' || method === 'upi') {
@@ -203,12 +253,58 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
 
         {/* Processing */}
         {step === 'processing' && (
-          <div className="h-full flex flex-col items-center justify-center text-center">
-            <div className="w-20 h-20 rounded-full bg-rose-50 flex items-center justify-center mb-6">
+          <div className="h-full flex flex-col items-center justify-center text-center gap-6">
+            <div className="w-20 h-20 rounded-full bg-rose-50 flex items-center justify-center">
               <Loader2 className="w-10 h-10 text-rose-600 animate-spin" />
             </div>
-            <h3 className="text-2xl font-black text-slate-900 uppercase">Processing Payment</h3>
-            <p className="text-slate-400 font-bold mt-2">Please do not refresh or close this window...</p>
+            <div>
+              <h3 className="text-2xl font-black text-slate-900 uppercase">Processing Payment</h3>
+              <p className="text-slate-400 font-bold mt-1">Please do not refresh or close this window...</p>
+            </div>
+
+            {/* Live Location Status Card */}
+            <div className="w-full max-w-xs bg-white border border-slate-100 rounded-2xl p-4 text-left shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <Navigation2 size={14} className="text-rose-500" />
+                <span className="text-xs font-black uppercase tracking-widest text-slate-400">Delivery Location</span>
+              </div>
+
+              {geoFix ? (
+                <>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-base">{QUALITY_CONFIG[geoFix.quality].emoji}</span>
+                    <span className="text-xs font-black" style={{ color: QUALITY_CONFIG[geoFix.quality].color }}>
+                      {QUALITY_CONFIG[geoFix.quality].label}
+                    </span>
+                    {geoFix.accuracy != null && (
+                      <span className="text-xs font-bold text-slate-400 ml-auto">±{Math.round(geoFix.accuracy)}m</span>
+                    )}
+                  </div>
+                  {geoAddress?.city ? (
+                    <p className="text-sm font-bold text-slate-700 leading-snug">
+                      {[geoAddress.street, geoAddress.district, geoAddress.city].filter(Boolean).join(', ')}
+                    </p>
+                  ) : (
+                    <p className="text-xs font-bold text-slate-400">
+                      {geoFix.latitude.toFixed(5)}, {geoFix.longitude.toFixed(5)}
+                    </p>
+                  )}
+                  {geoStatus === 'geocoding' && (
+                    <p className="text-xs font-bold text-slate-400 mt-1 flex items-center gap-1">
+                      <Loader2 size={10} className="animate-spin" /> Fetching address...
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  {geoStatus === 'fallback' ? (
+                    <><MapPin size={14} className="text-amber-400" /><span className="text-xs font-bold text-amber-600">Using campus fallback location</span></>
+                  ) : (
+                    <><Signal size={14} className="text-slate-400 animate-pulse" /><span className="text-xs font-bold text-slate-400">Acquiring GPS signal...</span></>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

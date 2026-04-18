@@ -30,7 +30,6 @@ export default function App() {
   const [isProductPageOpen, setIsProductPageOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [desktopMode, setDesktopMode] = useState(false);
   const [shakeColor, setShakeColor] = useState('#fbbf24');
   const [toppingType, setToppingType] = useState<'mango' | 'pistachio' | 'chocolate'>('mango');
   const [globalCoupon, setGlobalCoupon] = useState(false);
@@ -45,24 +44,6 @@ export default function App() {
       return () => clearTimeout(t);
     }
   }, [isAdmin]);
-
-  // Desktop site toggle — scales the viewport
-  useEffect(() => {
-    const root = document.documentElement;
-    if (desktopMode) {
-      root.classList.add('desktop-mode-active');
-      const scale = window.innerWidth / 1280;
-      document.body.style.transform = `scale(${scale})`;
-      document.body.style.transformOrigin = 'top left';
-      document.body.style.width = '1280px';
-    } else {
-      root.classList.remove('desktop-mode-active');
-      document.body.style.transform = '';
-      document.body.style.transformOrigin = '';
-      document.body.style.width = '';
-    }
-  }, [desktopMode]);
-
 
   const flavors = [
     { name: 'Classic Mango', color: '#fbbf24', id: 'mango', icon: '🥭' },
@@ -334,17 +315,6 @@ export default function App() {
           ))}
         </div>
       </div>
-
-      {/* ── Desktop Site Toggle (mobile only) ── */}
-      <motion.button
-        id="desktop-site-toggle"
-        whileTap={{ scale: 0.93 }}
-        onClick={() => setDesktopMode(d => !d)}
-        className="fixed z-[9999] right-4 bottom-[5.5rem] sm:hidden flex items-center gap-2 px-4 py-2.5 rounded-full font-black text-[10px] uppercase tracking-widest text-white shadow-2xl"
-        style={{ background: 'rgba(15,15,20,0.85)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
-      >
-        <span>{desktopMode ? '📱 Mobile View' : '🖥 Desktop Site'}</span>
-      </motion.button>
 
       {/* ══════════════════════════════════════════
           MOBILE USER MENU DRAWER

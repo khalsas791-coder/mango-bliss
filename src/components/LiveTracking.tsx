@@ -126,7 +126,8 @@ const MOCK_DRIVER = {
   vehicle: 'Hero Electric Optima'
 };
 
-const GNDECB_POS: [number, number] = [17.9254, 77.5187];
+// GNDECB Campus — Bathinda, Punjab
+const GNDECB_POS: [number, number] = [30.2050, 74.9570];
 
 // ─────────────────────────── Main Component ───────────────────────────
 

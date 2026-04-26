@@ -34,13 +34,13 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
   const [geoAddress, setGeoAddress] = useState<ReverseGeoAddress | null>(null);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'acquiring' | 'geocoding' | 'ready' | 'fallback'>('idle');
   const [customer, setCustomer] = useState({
-    name: 'John Doe',
-    phone: '9876543210',
-    email: 'john@example.com',
-    address: '123 Bliss Street, Flavor Town',
-    city: 'Mumbai',
-    state: 'MH',
-    pincode: '400001'
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: ''
   });
 
   const { user, isAuthenticated } = useAuthStore();
@@ -49,8 +49,8 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
     if (isAuthenticated && user) {
       setCustomer(prev => ({
         ...prev,
-        name: user.name,
-        email: user.email
+        name: user.name || prev.name,
+        email: user.email || prev.email
       }));
     }
   }, [isAuthenticated, user]);
@@ -83,6 +83,16 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
       if (!cancelled) {
         setGeoAddress(addr);
         setGeoStatus('ready');
+        // Auto-fill delivery address from real GPS location
+        if (addr) {
+          setCustomer(prev => ({
+            ...prev,
+            address: [addr.street, addr.district].filter(Boolean).join(', ') || prev.address,
+            city:    addr.city    || prev.city,
+            state:   addr.state   || prev.state,
+            pincode: addr.postalCode || prev.pincode
+          }));
+        }
       }
     })();
 
@@ -94,9 +104,9 @@ export function CheckoutDrawer({ onClose, onPaymentSuccess, productInfo }: Check
     setErrorMsg('');
     setIsNetworkError(false);
 
-    // Use pre-acquired fix or fallback to GNDECB campus
-    const FALLBACK_LAT = 17.9254;
-    const FALLBACK_LNG = 77.5187;
+    // Use pre-acquired fix or fallback to GNDECB campus (Bathinda, Punjab)
+    const FALLBACK_LAT = 30.2050;
+    const FALLBACK_LNG = 74.9570;
 
     let fix = geoFix;
     if (!fix) {

@@ -30,8 +30,10 @@ function initFirebase() {
     throw new Error('FIREBASE_SERVICE_ACCOUNT is not valid JSON. Please check the value.');
   }
 
-  const databaseURL = process.env.FIREBASE_DATABASE_URL ||
-    `https://${serviceAccount.project_id}-default-rtdb.firebaseio.com`;
+  const databaseURL =
+    process.env.FIREBASE_DATABASE_URL ||
+    `https://${serviceAccount.project_id}-default-rtdb.firebaseio.com` ||
+    'https://mango-169d3-default-rtdb.firebaseio.com';
 
   firebaseApp = admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),

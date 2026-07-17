@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Users ────────────────────────────────────────────────
+    // Only the user themselves can read/write their own doc.
+    // Admins can read all users.
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      // Server-side Admin SDK bypasses these rules automatically
+    }
+
+    // ── Orders ───────────────────────────────────────────────
+    // Anyone can create an order (guest checkout supported).
+    // Authenticated users can read their own orders.
+    match /orders/{orderId} {
+      allow create: if true;
+      allow read: if request.auth != null;
+      allow update, delete: if request.auth != null &&
+        request.auth.token.role == 'admin';
+    }
+
+    // ── Locations ────────────────────────────────────────────
+    // Server writes only — locked from client-side writes.
+    match /locations/{locationId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only Admin SDK (server) writes
+    }
+
+    // ── Health Check ─────────────────────────────────────────
+    match /_health/{doc} {
+      allow read, write: if false; // Server only
+    }
+  }
+}

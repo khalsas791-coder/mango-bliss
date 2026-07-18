@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-import { db, rtdb } from './firebase.js';
+import { getDb, getRtdb, isFirebaseReady, getFirebaseError } from './firebase.js';
 import authRoutes from './routes/authRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,9 +48,16 @@ app.use('/api/auth', authRoutes);
 
 // --- Health Check ---
 app.get('/api/health', async (req, res) => {
+  if (!isFirebaseReady()) {
+    return res.status(503).json({
+      status: 'error',
+      firestore: 'disconnected',
+      error: getFirebaseError() || 'Firebase not initialized',
+      fix: 'Check FIREBASE_SERVICE_ACCOUNT env variable in Vercel'
+    });
+  }
   try {
-    // Quick Firestore ping
-    await db.collection('_health').doc('ping').set({ ts: Date.now() });
+    await getDb().collection('_health').doc('ping').set({ ts: Date.now() });
     res.status(200).json({ status: 'online', firestore: 'connected', timestamp: new Date().toISOString() });
   } catch (err) {
     res.status(503).json({ status: 'error', firestore: 'disconnected', error: err.message });
@@ -118,7 +125,7 @@ app.post('/api/admin/login', async (req, res) => {
 // --- Admin: All Orders ---
 app.get('/api/admin/stats', adminAuthMiddleware, async (req, res) => {
   try {
-    const snapshot = await db.collection('orders').orderBy('createdAt', 'desc').get();
+    const snapshot = await getDb().collection('orders').orderBy('createdAt', 'desc').get();
     const orders = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     const stats = {
       totalOrders: orders.length,
@@ -138,7 +145,7 @@ app.get('/api/admin/stats', adminAuthMiddleware, async (req, res) => {
 // --- Admin: All Users ---
 app.get('/api/admin/users', adminAuthMiddleware, async (req, res) => {
   try {
-    const snapshot = await db.collection('users').orderBy('createdAt', 'desc').get();
+    const snapshot = await getDb().collection('users').orderBy('createdAt', 'desc').get();
     const users = snapshot.docs.map(d => {
       const { password, ...rest } = d.data();
       return { id: d.id, ...rest };
@@ -153,7 +160,7 @@ app.get('/api/admin/users', adminAuthMiddleware, async (req, res) => {
 app.post('/api/admin/force-status', adminAuthMiddleware, async (req, res) => {
   try {
     const { orderId, statusPhase } = req.body;
-    const snapshot = await db.collection('orders').where('systemOrderId', '==', orderId).limit(1).get();
+    const snapshot = await getDb().collection('orders').where('systemOrderId', '==', orderId).limit(1).get();
     if (snapshot.empty) return res.status(404).json({ success: false, message: 'Order not found.' });
     const docRef = snapshot.docs[0].ref;
     await docRef.update({ statusPhase, updatedAt: new Date().toISOString() });
@@ -168,7 +175,7 @@ app.post('/api/admin/force-status', adminAuthMiddleware, async (req, res) => {
     });
 
     // Push to Firebase RTDB for real-time tracking
-    await rtdb.ref(`orders/${orderId}`).update({ statusPhase, updatedAt: Date.now() });
+    await getRtdb().ref(`orders/${orderId}`).update({ statusPhase, updatedAt: Date.now() });
 
     res.status(200).json({ success: true });
   } catch (error) {
@@ -218,10 +225,10 @@ app.post('/api/orders/create', async (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
-    const orderRef = await db.collection('orders').add(orderData);
+    const orderRef = await getDb().collection('orders').add(orderData);
 
     // Mirror to RTDB for real-time delivery tracking
-    await rtdb.ref(`orders/${systemOrderId}`).set({
+    await getRtdb().ref(`orders/${systemOrderId}`).set({
       deliveryLat: startLat,
       deliveryLng: startLng,
       statusPhase: orderData.statusPhase,
@@ -251,7 +258,7 @@ app.post('/api/orders/verify', async (req, res) => {
       isMatch = expectedSignature === razorpay_signature;
     }
 
-    const snapshot = await db.collection('orders').where('systemOrderId', '==', systemOrderId).limit(1).get();
+    const snapshot = await getDb().collection('orders').where('systemOrderId', '==', systemOrderId).limit(1).get();
     if (snapshot.empty) return res.status(404).json({ success: false, message: 'Order not found.' });
 
     const docRef = snapshot.docs[0].ref;
@@ -270,7 +277,7 @@ app.post('/api/orders/verify', async (req, res) => {
 // --- Get Single Order ---
 app.get('/api/orders/:id', async (req, res) => {
   try {
-    const snapshot = await db.collection('orders').where('systemOrderId', '==', req.params.id).limit(1).get();
+    const snapshot = await getDb().collection('orders').where('systemOrderId', '==', req.params.id).limit(1).get();
     if (snapshot.empty) return res.status(404).json({ success: false, message: 'Not found' });
     const doc = snapshot.docs[0];
     res.status(200).json({ success: true, order: { id: doc.id, ...doc.data() } });
@@ -337,17 +344,17 @@ app.post('/api/location/update', async (req, res) => {
     };
 
     // Upsert into Firestore (one document per orderId)
-    await db.collection('locations').doc(orderId).set(locationData, { merge: true });
+    await getDb().collection('locations').doc(orderId).set(locationData, { merge: true });
 
     // Update the order's user coordinates in Firestore
-    const orderSnap = await db.collection('orders').where('systemOrderId', '==', orderId).limit(1).get();
+    const orderSnap = await getDb().collection('orders').where('systemOrderId', '==', orderId).limit(1).get();
     if (!orderSnap.empty) {
       await orderSnap.docs[0].ref.update({ userLat: lat, userLng: lng });
     }
 
     // Update user's last known location
     if (userId && userId !== 'guest') {
-      await db.collection('users').doc(userId).update({
+      await getDb().collection('users').doc(userId).update({
         lastKnownLat: lat,
         lastKnownLng: lng,
         lastLocationAt: new Date().toISOString()
@@ -355,7 +362,7 @@ app.post('/api/location/update', async (req, res) => {
     }
 
     // Push to Firebase RTDB for real-time delivery tracking UI
-    await rtdb.ref(`locations/${orderId}`).set({ latitude: lat, longitude: lng, quality, accuracy, timestamp: Date.now() });
+    await getRtdb().ref(`locations/${orderId}`).set({ latitude: lat, longitude: lng, quality, accuracy, timestamp: Date.now() });
 
     // Socket.io broadcast
     const broadcastPayload = { latitude: lat, longitude: lng, accuracy, quality, address: address?.city ? `${address.city}, ${address.state || ''}`.trim() : null, timestamp: locationData.timestamp };
@@ -372,7 +379,7 @@ app.post('/api/location/update', async (req, res) => {
 
 app.get('/api/location/all', async (req, res) => {
   try {
-    const snapshot = await db.collection('locations').orderBy('timestamp', 'desc').limit(200).get();
+    const snapshot = await getDb().collection('locations').orderBy('timestamp', 'desc').limit(200).get();
     const locations = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     res.status(200).json({ success: true, count: locations.length, locations });
   } catch (error) {
@@ -382,7 +389,7 @@ app.get('/api/location/all', async (req, res) => {
 
 app.get('/api/location/:userId', async (req, res) => {
   try {
-    const snapshot = await db.collection('locations').where('userId', '==', req.params.userId).orderBy('timestamp', 'desc').limit(1).get();
+    const snapshot = await getDb().collection('locations').where('userId', '==', req.params.userId).orderBy('timestamp', 'desc').limit(1).get();
     if (snapshot.empty) return res.status(404).json({ success: false, message: 'Location not found' });
     const doc = snapshot.docs[0];
     res.status(200).json({ success: true, location: { id: doc.id, ...doc.data() } });
@@ -424,7 +431,7 @@ io.on('connection', (socket) => {
   socket.on('joinOrderRoom', async (orderId) => {
     socket.join(orderId);
     try {
-      const snapshot = await db.collection('orders').where('systemOrderId', '==', orderId).limit(1).get();
+      const snapshot = await getDb().collection('orders').where('systemOrderId', '==', orderId).limit(1).get();
       if (!snapshot.empty) {
         const order = snapshot.docs[0].data();
         socket.emit('locationUpdate', { deliveryLat: order.deliveryLat, deliveryLng: order.deliveryLng, statusPhase: order.statusPhase, etaMinutes: order.etaMinutes });
@@ -437,7 +444,7 @@ io.on('connection', (socket) => {
 // --- Delivery Simulation Engine (Firestore-backed) ---
 setInterval(async () => {
   try {
-    const snapshot = await db.collection('orders')
+    const snapshot = await getDb().collection('orders')
       .where('paymentStatus', 'in', ['success', 'paid', 'cod_placed'])
       .get();
 
@@ -473,7 +480,7 @@ setInterval(async () => {
         io.to(order.systemOrderId).emit('locationUpdate', payload);
 
         // Update RTDB too
-        await rtdb.ref(`orders/${order.systemOrderId}`).update({ ...payload, updatedAt: Date.now() });
+        await getRtdb().ref(`orders/${order.systemOrderId}`).update({ ...payload, updatedAt: Date.now() });
       }
     }
   } catch (error) {

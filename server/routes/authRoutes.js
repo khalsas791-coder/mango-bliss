@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { db } from '../firebase.js';
+import { getDb } from '../firebase.js';
 
 const router = express.Router();
 
@@ -29,7 +29,7 @@ router.post('/register', async (req, res) => {
     const emailLower = email.toLowerCase().trim();
 
     // Check if user already exists
-    const existing = await db.collection('users')
+    const existing = await getDb().collection('users')
       .where('email', '==', emailLower)
       .limit(1)
       .get();
@@ -57,7 +57,7 @@ router.post('/register', async (req, res) => {
       lastLocationAt: null
     };
 
-    const userRef = await db.collection('users').add(userData);
+    const userRef = await getDb().collection('users').add(userData);
     const token = generateToken(userRef.id, 'user');
 
     console.log(`✅ [Auth] Registered new user: ${emailLower} (${userRef.id})`);
@@ -100,7 +100,7 @@ router.post('/login', async (req, res) => {
 
     if (emailLower === adminEmail && password === adminPassword) {
       // Admin login — upsert admin record in Firestore
-      const adminQuery = await db.collection('users')
+      const adminQuery = await getDb().collection('users')
         .where('email', '==', emailLower)
         .limit(1)
         .get();
@@ -109,7 +109,7 @@ router.post('/login', async (req, res) => {
       if (adminQuery.empty) {
         const salt = await bcrypt.genSalt(12);
         const hashedPw = await bcrypt.hash(adminPassword, salt);
-        const adminRef = await db.collection('users').add({
+        const adminRef = await getDb().collection('users').add({
           name: 'Admin',
           email: emailLower,
           password: hashedPw,
@@ -121,7 +121,7 @@ router.post('/login', async (req, res) => {
         adminId = adminRef.id;
       } else {
         adminId = adminQuery.docs[0].id;
-        await db.collection('users').doc(adminId).update({
+        await getDb().collection('users').doc(adminId).update({
           role: 'admin',
           lastLoginAt: new Date().toISOString(),
           loginCount: (adminQuery.docs[0].data().loginCount || 0) + 1
@@ -139,7 +139,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Regular user login
-    const userQuery = await db.collection('users')
+    const userQuery = await getDb().collection('users')
       .where('email', '==', emailLower)
       .limit(1)
       .get();
@@ -158,7 +158,7 @@ router.post('/login', async (req, res) => {
 
     // Update last login info
     const clientIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-    await db.collection('users').doc(userDoc.id).update({
+    await getDb().collection('users').doc(userDoc.id).update({
       lastLoginAt: new Date().toISOString(),
       lastLoginIP: clientIP,
       loginCount: (userData.loginCount || 0) + 1
@@ -205,7 +205,7 @@ router.get('/me', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid or expired token.' });
     }
 
-    const userDoc = await db.collection('users').doc(decoded.id).get();
+    const userDoc = await getDb().collection('users').doc(decoded.id).get();
     if (!userDoc.exists) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }

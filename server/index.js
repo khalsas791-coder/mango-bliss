@@ -68,6 +68,38 @@ app.get('/api/test-json', (req, res) => {
   res.status(200).json({ success: true, message: 'Server is correctly returning JSON' });
 });
 
+// Debug endpoint — shows Firebase init status
+app.get('/api/debug', (req, res) => {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT || '';
+  const hasKey = raw.length > 0;
+  let parseOk = false;
+  let parseError = null;
+  let projectId = null;
+  let firstChars = raw.substring(0, 60);
+  let lastChars = raw.substring(raw.length - 30);
+
+  try {
+    const parsed = JSON.parse(raw.trim().replace(/^["']|["']$/g, ''));
+    parseOk = true;
+    projectId = parsed.project_id || 'unknown';
+  } catch (e) {
+    parseError = e.message;
+  }
+
+  res.status(200).json({
+    firebase_env_set: hasKey,
+    firebase_env_length: raw.length,
+    firebase_first_chars: firstChars,
+    firebase_last_chars: lastChars,
+    json_parse_ok: parseOk,
+    project_id: projectId,
+    parse_error: parseError,
+    firebase_ready: isFirebaseReady(),
+    firebase_error: getFirebaseError(),
+    database_url: process.env.FIREBASE_DATABASE_URL || 'not set'
+  });
+});
+
 // --- OSRM Directions Proxy ---
 app.get('/api/directions', async (req, res) => {
   const { startLat, startLng, endLat, endLng } = req.query;
